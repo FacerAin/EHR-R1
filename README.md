@@ -1,10 +1,16 @@
-# EHR-R1: Reinforcement Learning for EHRSQL using TRL
+# EHR-R1: Reinforcement Learning for Electronic Health Record SQL Generation
 
-EHR-R1 is a project for training reinforcement learning models for SQL generation on the EHRSQL dataset using TRL (Transformer Reinforcement Learning).
+A reinforcement learning framework for training SQL generation models on Electronic Health Record (EHR) data using the TRL (Transformer Reinforcement Learning) library and GRPO (Group Relative Policy Optimization).
 
-## Installation
+## 🎯 Overview
 
-This project uses the `uv` package manager:
+EHR-R1 focuses on training language models to generate accurate SQL queries for electronic health record systems. The project implements state-of-the-art reinforcement learning techniques to improve model performance on complex medical data queries.
+
+## 🚀 Quick Start
+
+### Installation
+
+This project uses `uv` for dependency management:
 
 ```bash
 # Install dependencies
@@ -14,67 +20,108 @@ uv sync
 uv sync --extra dev
 ```
 
-## Usage
-
-### Training
+### Training a Model
 
 ```bash
 # Basic training
-ehr-r1-train --data_path /path/to/ehrsql/data
+train --data_path /path/to/ehrsql/data
 
-# Training with configuration options
-ehr-r1-train --data_path /path/to/data --model_name microsoft/DialoGPT-medium --num_epochs 5 --output_dir ./my_outputs
+# Training with custom configuration
+train \
+  --data_path /path/to/data \
+  --model_name microsoft/DialoGPT-medium \
+  --num_epochs 5 \
+  --output_dir ./my_outputs
 ```
 
-### Evaluation
+### Model Evaluation
 
 ```bash
-# Model evaluation
-ehr-r1-eval --model_path ./outputs/checkpoint-1000 --test_data_path /path/to/test/data
+# Evaluate trained model
+evaluate --model_path ./outputs/checkpoint-1000 --test_data_path /path/to/test/data
 ```
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 src/ehr_r1/
-├── data/                    # Data loading and preprocessing
-│   ├── ehrsql_dataset.py   # EHRSQL dataset class
+├── data/                        # Data processing and loading
+│   ├── ehrsql_dataset.py       # EHRSQL dataset implementation
 │   └── __init__.py
-├── models/                  # Model definitions
-│   ├── reward_model.py     # Reward model
+├── models/                      # Model definitions
+│   ├── reward_model.py         # Reward model for RL training
 │   └── __init__.py
-├── training/               # Training modules
-│   ├── grpo_trainer.py    # GRPO trainer
+├── training/                    # Training components
+│   ├── grpo_trainer.py         # GRPO trainer implementation
 │   └── __init__.py
-├── evaluation/             # Evaluation modules
-│   ├── evaluator.py       # Evaluation metrics
+├── evaluation/                  # Evaluation and metrics
+│   ├── evaluator.py            # Model evaluation utilities
 │   └── __init__.py
-├── utils/                  # Utility modules
-│   ├── config.py          # Configuration management
+├── utils/                       # Utility modules
+│   ├── config.py               # Configuration management
+│   ├── prompts.py              # Prompt templates
+│   ├── sql_executor.py         # SQL execution utilities
 │   └── __init__.py
-├── train.py               # Training entry point
-├── evaluate.py            # Evaluation entry point
+├── train.py                     # Main training script
+├── evaluate.py                  # Main evaluation script
+├── inference.py                 # Model inference
+├── evaluate_execution.py        # SQL execution evaluation
 └── __init__.py
+preprocess/                      # Data preprocessing utilities
+├── preprocess_utils.py         # General preprocessing functions
+├── preprocess_db.py            # Database preprocessing
+└── preprocess_db_mimic_iv.py   # MIMIC-IV specific preprocessing
 ```
 
-## Key Features
+## ✨ Key Features
 
-- **TRL-based GRPO Training**: GRPO (Group Relative Policy Optimization) training using the TRL library
-- **EHRSQL Dataset Support**: Processing Electronic Health Record SQL datasets
-- **Reward Model**: Reward model for evaluating SQL query quality
-- **Comprehensive Evaluation**: Various evaluation metrics including execution accuracy and exact match
-- **Weights & Biases Integration**: Training monitoring and logging
+- **🔄 Reinforcement Learning**: GRPO (Group Relative Policy Optimization) training using TRL
+- **🏥 EHR Specialization**: Designed specifically for Electronic Health Record SQL generation
+- **🎯 Reward-Based Training**: Custom reward model for evaluating SQL query quality
+- **📊 Comprehensive Evaluation**: Multiple metrics including execution accuracy and exact match
+- **📈 Experiment Tracking**: Weights & Biases integration for monitoring training progress
+- **🔧 Flexible Configuration**: Easy-to-use configuration system for experiments
+- **⚡ High Performance**: Optimized for efficient training and inference
 
-## Development
+## 🛠️ Development
+
+### Code Quality
 
 ```bash
-# Code formatting
+# Format code
 uv run black src/
 uv run isort src/
 
 # Type checking
 uv run mypy src/
 
+# Linting
+uv run flake8 src/
+```
+
+### Testing
+
+```bash
 # Run tests
 uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=src/ehr_r1
 ```
+
+## 📋 Requirements
+
+- Python 3.9+
+- PyTorch 2.0+
+- Transformers 4.30+
+- TRL 0.7.0+
+
+See `pyproject.toml` for complete dependency list.
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.

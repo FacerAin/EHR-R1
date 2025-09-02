@@ -38,8 +38,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [project.scripts]
-ehr-r1-train = "ehr_r1.train:main"
-ehr-r1-eval = "ehr_r1.evaluate:main"
+train = "ehr_r1.train:main"
+evaluate = "ehr_r1.evaluate:main"
 
 [tool.black]
 line-length = 88
