@@ -5,7 +5,7 @@ from typing import Optional
 
 from ehr_r1.data.ehrsql_dataset import EHRSQLDataset
 from ehr_r1.training.grpo_trainer import EHRSQLGRPOTrainer
-from ehr_r1.utils.config import TrainingConfig, DataConfig, ModelConfig
+from ehr_r1.utils.config import DataConfig, ModelConfig, TrainingConfig
 
 
 def parse_args() -> argparse.Namespace:
@@ -45,28 +45,28 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     """Main training function."""
     args = parse_args()
-    
+
     # Initialize configurations
     training_config = TrainingConfig(
         model_name=args.model_name,
         num_train_epochs=args.num_epochs,
         output_dir=args.output_dir,
     )
-    
+
     data_config = DataConfig(
         train_data_path=args.data_path,
     )
-    
+
     model_config = ModelConfig(
         model_name=args.model_name,
     )
-    
+
     # Load dataset
     dataset = EHRSQLDataset(
         data_path=data_config.train_data_path,
         max_length=data_config.max_length,
     )
-    
+
     # Initialize trainer
     trainer = EHRSQLGRPOTrainer(
         model_name=training_config.model_name,
@@ -74,11 +74,11 @@ def main() -> None:
         per_device_train_batch_size=training_config.per_device_train_batch_size,
         use_wandb=training_config.use_wandb,
     )
-    
+
     # Setup models and trainer
     trainer.setup_models()
     trainer.setup_trainer(dataset)
-    
+
     # Start training
     trainer.train(
         dataset=dataset,

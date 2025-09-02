@@ -5,10 +5,10 @@ import json
 import re
 from typing import Optional
 
-from vllm import LLM, SamplingParams
-from transformers import AutoTokenizer
 from datasets import load_dataset
 from tqdm import tqdm
+from transformers import AutoTokenizer
+from vllm import LLM, SamplingParams
 
 from ehr_r1.evaluation.evaluator import EHRSQLEvaluator
 from ehr_r1.utils.logger import get_logger
@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--num_samples",
         type=int,
-        default=100,
+        default=10000,
         help="Number of samples to evaluate",
     )
     parser.add_argument(
@@ -66,15 +66,15 @@ def parse_args() -> argparse.Namespace:
 
 def clean_sql(sql: str) -> str:
     """Clean and normalize SQL query."""
-    sql = re.sub(r'\s+', ' ', sql.strip())
-    sql = sql.rstrip(';')
+    sql = re.sub(r"\s+", " ", sql.strip())
+    sql = sql.rstrip(";")
     return sql
 
 
 def parse_response(response: str) -> str:
     """Parse SQL response from model output."""
     pattern = r"```sql\s*(.*?)\s*```"
-    
+
     sql_blocks = re.findall(pattern, response, re.DOTALL)
 
     if sql_blocks:
@@ -115,33 +115,33 @@ def get_stop_token_ids(model_name: str) -> list:
 def main() -> None:
     """Main evaluation function."""
     args = parse_args()
-    
+
     logger.info(f"Starting evaluation with model: {args.model_name}")
     logger.info(f"Tensor parallel size: {args.tensor_parallel_size}")
     logger.info(f"Temperature: {args.temperature}")
     logger.info(f"Max length: {args.max_length}")
-    
+
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
-    
+
     # Get stop token IDs
     stop_token_ids = get_stop_token_ids(args.model_name)
     logger.info(f"Stop token IDs: {stop_token_ids}")
-    
+
     # Set up VLLM parameters
     max_model_len = 8192
     max_input_len = 6144
     max_output_len = args.max_length
-    
+
     logger.info(f"Max model length: {max_model_len}")
-    
+
     sampling_params = SamplingParams(
         temperature=args.temperature,
         max_tokens=max_output_len,
         n=1,
-        stop_token_ids=stop_token_ids
+        stop_token_ids=stop_token_ids,
     )
-    
+
     # Initialize VLLM
     llm = LLM(
         model=args.model_name,
@@ -152,49 +152,49 @@ def main() -> None:
         swap_space=42,
         enforce_eager=True,
         disable_custom_all_reduce=True,
-        trust_remote_code=True
+        trust_remote_code=True,
     )
-    
+
     logger.info(f"Loading dataset: {args.dataset_path}")
-    
+
     # Load dataset from JSON file
     try:
-        with open(args.dataset_path, 'r') as f:
+        with open(args.dataset_path, "r") as f:
             data = json.load(f)
-        
+
         # Extract data array from JSON structure
-        if isinstance(data, dict) and 'data' in data:
-            dataset = data['data']
+        if isinstance(data, dict) and "data" in data:
+            dataset = data["data"]
         else:
             dataset = data
-            
+
     except Exception as e:
         logger.error(f"Could not load {args.dataset_path}. Error: {e}")
         return
-    
+
     # Limit samples if specified
     if args.num_samples and args.num_samples < len(dataset):
-        dataset = dataset[:args.num_samples]
-    
+        dataset = dataset[: args.num_samples]
+
     logger.info(f"Evaluating on {len(dataset)} samples...")
-    
+
     # Prepare prompts
     chat_prompts = []
     targets = []
-    
+
     for i, example in enumerate(tqdm(dataset, desc="Preparing prompts")):
         try:
             # Extract fields from EHRSQL dataset structure
-            question = example.get('question', '')
+            question = example.get("question", "")
             # For local dataset, we might not have schema in each example
             # You may need to load schema separately or modify this
-            schema = example.get('schema', example.get('db_schema', 'mimic_iv'))
-            target_sql = example.get('query', example.get('sql', ''))
-            
+            schema = example.get("schema", example.get("db_schema", "mimic_iv"))
+            target_sql = example.get("query", example.get("sql", ""))
+
             if not question:
                 logger.warning(f"Skipping sample {i}: missing question")
                 continue
-            
+
             # Format prompt for OmniSQL
             prompt = f"""Given the database schema below, write a SQL query to answer the question.
 
@@ -204,55 +204,59 @@ Schema:
 Question: {question}
 
 SQL:"""
-            
+
             # Apply chat template
             chat_prompt = tokenizer.apply_chat_template(
                 [{"role": "user", "content": prompt}],
                 add_generation_prompt=True,
-                tokenize=False
+                tokenize=False,
             )
-            
+
             chat_prompts.append(chat_prompt)
             targets.append(target_sql if target_sql else "")
-            
+
         except Exception as e:
             logger.error(f"Error processing sample {i}: {e}")
             continue
-    
+
     logger.info(f"Generating responses for {len(chat_prompts)} samples...")
-    
+
     # Generate responses
     outputs = llm.generate(chat_prompts, sampling_params)
-    
+
     # Parse predictions
     predictions = []
     for output in outputs:
         response = output.outputs[0].text
         pred_sql = parse_response(response)
         predictions.append(pred_sql)
-    
+
     # Print sample for debugging
     for i in range(min(3, len(predictions))):
         logger.info(f"\nSample {i}:")
         logger.info(f"Target: {targets[i]}")
         logger.info(f"Prediction: {predictions[i]}")
         logger.info("-" * 50)
-    
+
     # Compute metrics using existing evaluator
     if predictions and targets:
         evaluator = EHRSQLEvaluator()
         results = evaluator.evaluate(predictions, targets, args.output_path)
-        
+
         # Add model info to results
-        results.update({
-            "model_name": args.model_name,
-            "dataset_path": args.dataset_path,
-        })
-        
+        results.update(
+            {
+                "model_name": args.model_name,
+                "dataset_path": args.dataset_path,
+            }
+        )
+
         logger.info(f"\n=== EVALUATION RESULTS ===")
-        logger.info(f"Exact Match Accuracy: {results.get('exact_match_accuracy', 'N/A'):.4f}")
+        logger.info(
+            f"Exact Match Accuracy: {results.get('exact_match_accuracy', 'N/A'):.4f}"
+        )
         logger.info(f"Results saved to: {args.output_path}")
-        
+
     else:
         logger.error("No valid predictions generated!")
 

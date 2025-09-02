@@ -1,14 +1,15 @@
 """Configuration utilities."""
 
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
 import json
 import os
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 
 @dataclass
 class TrainingConfig:
     """Training configuration."""
+
     model_name: str = "microsoft/DialoGPT-medium"
     learning_rate: float = 1e-5
     per_device_train_batch_size: int = 8
@@ -28,6 +29,7 @@ class TrainingConfig:
 @dataclass
 class DataConfig:
     """Data configuration."""
+
     train_data_path: Optional[str] = None
     val_data_path: Optional[str] = None
     test_data_path: Optional[str] = None
@@ -38,6 +40,7 @@ class DataConfig:
 @dataclass
 class ModelConfig:
     """Model configuration."""
+
     model_name: str = "microsoft/DialoGPT-medium"
     reward_model_name: Optional[str] = None
     use_peft: bool = True
@@ -46,22 +49,22 @@ class ModelConfig:
 
 class ConfigManager:
     """Configuration manager."""
-    
+
     @staticmethod
     def load_config(config_path: str) -> Dict[str, Any]:
         """Load configuration from file."""
         if not os.path.exists(config_path):
             raise FileNotFoundError(f"Config file not found: {config_path}")
-        
-        with open(config_path, 'r') as f:
+
+        with open(config_path, "r") as f:
             config = json.load(f)
         return config
-        
+
     @staticmethod
     def save_config(config: Dict[str, Any], config_path: str) -> None:
         """Save configuration to file."""
         # Ensure directory exists
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
-        
-        with open(config_path, 'w') as f:
+
+        with open(config_path, "w") as f:
             json.dump(config, f, indent=2)

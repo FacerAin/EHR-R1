@@ -1,16 +1,17 @@
 """GRPO training implementation using TRL."""
 
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
+
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from trl import GRPOTrainer, GRPOConfig
-from trl.core import LengthSampler
 import wandb
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from trl import GRPOConfig, GRPOTrainer
+from trl.core import LengthSampler
 
 
 class EHRSQLGRPOTrainer:
     """GRPO trainer for EHRSQL task using TRL."""
-    
+
     def __init__(
         self,
         model_name: str = "microsoft/DialoGPT-medium",
@@ -35,27 +36,27 @@ class EHRSQLGRPOTrainer:
             log_with="wandb" if use_wandb else None,
             beta=beta,
         )
-        
+
         self.tokenizer = None
         self.model = None
         self.grpo_trainer = None
         self.reward_model = None
-        
+
     def setup_models(self):
         """Initialize models and tokenizer."""
         # TODO: Implement model setup
         pass
-        
+
     def setup_trainer(self, dataset):
         """Setup GRPO trainer with dataset."""
         # TODO: Implement trainer setup
         pass
-        
+
     def train_step(self, batch: Dict[str, Any]) -> Dict[str, float]:
         """Single training step."""
         # TODO: Implement training step
         pass
-        
+
     def train(
         self,
         dataset,
@@ -67,7 +68,7 @@ class EHRSQLGRPOTrainer:
         """Main training loop."""
         # TODO: Implement main training loop
         pass
-        
+
     def generate_response(
         self,
         query: str,
