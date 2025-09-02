@@ -176,8 +176,15 @@ def main() -> None:
         else:
             dataset = data
 
+        # Load corresponding labels (SQL queries)
+        labels_path = args.dataset_path.replace("data.json", "label.json")
+        logger.info(f"Loading labels from: {labels_path}")
+        
+        with open(labels_path, "r") as f:
+            labels = json.load(f)
+
     except Exception as e:
-        logger.error(f"Could not load {args.dataset_path}. Error: {e}")
+        logger.error(f"Could not load dataset or labels. Error: {e}")
         return
 
     # Limit samples if specified
@@ -193,6 +200,7 @@ def main() -> None:
     for i, example in enumerate(tqdm(dataset, desc="Preparing prompts")):
         try:
             # Extract fields from EHRSQL dataset structure
+            example_id = example.get("id", "")
             question = example.get("question", "")
             # Get database schema - use from example or default to MIMIC-IV
             db_name = example.get("db_id", example.get("database", "mimic_iv"))
@@ -201,10 +209,15 @@ def main() -> None:
                 logger.warning(f"Schema not found for database: {db_name}, using MIMIC-IV")
                 schema = get_schema("mimic_iv") or "mimic_iv"  # Fallback to string if still None
             
-            target_sql = example.get("query", example.get("sql", ""))
+            # Get target SQL from labels using the example ID
+            target_sql = labels.get(example_id, "")
 
             if not question:
                 logger.warning(f"Skipping sample {i}: missing question")
+                continue
+            
+            if not target_sql:
+                logger.warning(f"Skipping sample {i}: missing target SQL for ID {example_id}")
                 continue
 
             # Format prompt using template
@@ -218,7 +231,7 @@ def main() -> None:
             )
 
             chat_prompts.append(chat_prompt)
-            targets.append(target_sql if target_sql else "")
+            targets.append(target_sql)
 
         except Exception as e:
             logger.error(f"Error processing sample {i}: {e}")
