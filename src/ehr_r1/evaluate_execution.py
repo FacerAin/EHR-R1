@@ -3,7 +3,7 @@
 import argparse
 import json
 from pathlib import Path
-from evaluation.evaluator import EHRSQLEvaluator
+from ehr_r1.evaluation.evaluator import EHRSQLEvaluator
 
 
 def main():

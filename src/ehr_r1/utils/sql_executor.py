@@ -114,9 +114,9 @@ class SQLExecutor:
                 # Sort the entire result
                 try:
                     normalized.sort()
-                except TypeError:
-                    # If sorting fails, return as is
-                    pass
+                except TypeError as e:
+                    # If sorting fails, log the error and return as is
+                    print(f"Failed to sort normalized result due to TypeError: {e}")
                 return normalized
             else:
                 # Simple list, sort if possible
@@ -150,7 +150,7 @@ class SQLExecutor:
             schema_info = {}
             for table in tables:
                 # Get column info for each table
-                cursor.execute(f"PRAGMA table_info({table});")
+                cursor.execute("PRAGMA table_info(?)", (table,))
                 columns = [row[1] for row in cursor.fetchall()]  # row[1] is column name
                 schema_info[table] = columns
                 
