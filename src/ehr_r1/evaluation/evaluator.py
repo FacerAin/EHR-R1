@@ -6,6 +6,9 @@ from sklearn.metrics import accuracy_score
 import pandas as pd
 import json
 from ..utils.sql_executor import ExecutionAccuracyEvaluator, SQLExecutor
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class EHRSQLEvaluator:
@@ -89,7 +92,7 @@ class EHRSQLEvaluator:
                     components['columns'].append(token.value)
                     
         except Exception as e:
-            print(f"Error parsing SQL: {e}")
+            logger.debug(f"Error parsing SQL: {e}")
             
         return components
         
@@ -149,7 +152,7 @@ class EHRSQLEvaluator:
                 detailed_file = output_file.replace('.json', '_detailed.json')
                 with open(detailed_file, 'w') as f:
                     json.dump(exec_results, f, indent=2)
-                print(f"Detailed execution results saved to {detailed_file}")
+                logger.info(f"Detailed execution results saved to {detailed_file}")
         
         # Summary statistics
         results['total_predictions'] = len(predictions)
@@ -160,7 +163,7 @@ class EHRSQLEvaluator:
         if output_file:
             with open(output_file, 'w') as f:
                 json.dump(results, f, indent=2)
-            print(f"Evaluation results saved to {output_file}")
+            logger.info(f"Evaluation results saved to {output_file}")
             
         return results
         

@@ -1,4 +1,4 @@
-preprocess
+helper.sh
 
 # Python
 __pycache__/
