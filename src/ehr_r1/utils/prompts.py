@@ -1,36 +1,94 @@
 """Prompt templates for EHRSQL tasks."""
 
 from typing import Any, Dict
+from pathlib import Path
+
+
+def load_template(template_name: str) -> str:
+    """Load template from file.
+    
+    Args:
+        template_name: Template filename (e.g., 'omnisql_prompt.jinja2')
+    
+    Returns:
+        Template content as string
+    """
+    template_path = Path(__file__).parent.parent / "templates" / template_name
+    
+    if not template_path.exists():
+        raise FileNotFoundError(f"Template {template_name} not found at {template_path}")
+    
+    with open(template_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def render_template(template_content: str, **kwargs) -> str:
+    """Render Jinja2 template with variables.
+    
+    Args:
+        template_content: Template content string
+        **kwargs: Variables to render in template
+    
+    Returns:
+        Rendered template
+    """
+    try:
+        from jinja2 import Template
+        
+        template = Template(template_content)
+        return template.render(**kwargs)
+    except ImportError:
+        # Fallback to simple string formatting if Jinja2 not available
+        return simple_template_render(template_content, **kwargs)
+
+
+def simple_template_render(template_content: str, **kwargs) -> str:
+    """Simple template rendering without Jinja2.
+    
+    Args:
+        template_content: Template content with {{ variable }} placeholders
+        **kwargs: Variables to substitute
+    
+    Returns:
+        Rendered template
+    """
+    result = template_content
+    for key, value in kwargs.items():
+        result = result.replace(f"{{{{ {key} }}}}", str(value))
+    return result
+
+
+def format_prompt(template_name: str, **kwargs) -> str:
+    """Format prompt using template.
+    
+    Args:
+        template_name: Template filename (e.g., 'omnisql_prompt.jinja2')
+        **kwargs: Template variables
+    
+    Returns:
+        Formatted prompt string
+    """
+    template_content = load_template(template_name)
+    return render_template(template_content, **kwargs)
+
+
+# Convenience functions for common templates
+def format_sql_prompt(schema: str, question: str, template: str = "omnisql_prompt.jinja2") -> str:
+    """Format SQL generation prompt.
+    
+    Args:
+        schema: Database schema
+        question: Natural language question
+        template: Template to use
+    
+    Returns:
+        Formatted prompt string
+    """
+    return format_prompt(template, schema=schema, question=question)
 
 
 class EHRSQLPromptTemplate:
     """Template manager for EHRSQL prompts."""
-
-    INPUT_PROMPT_TEMPLATE = """Task Overview:
-You are a data science expert. Below, you are provided with a database schema and a natural language question. Your task is to understand the schema and generate a valid SQL query to answer the question.
-
-Database Engine:
-SQLite
-
-Database Schema:
-{db_details}
-This schema describes the database's structure, including tables, columns, primary keys, foreign keys, and any relevant relationships or constraints.
-
-Question:
-{question}
-
-Instructions:
-- Make sure you only output the information that is asked in the question. If the question asks for a specific column, make sure to only include that column in the SELECT clause, nothing more.
-- The generated query should return all of the information asked in the question without any missing or extra information.
-- Before generating the final SQL query, please think through the steps of how to write the query.
-
-Output Format:
-In your answer, please enclose the generated SQL query in a code block:
-```
--- Your SQL query
-```
-
-Take a deep breath and think step by step to find the correct SQL query."""
 
     @classmethod
     def create_prompt(
@@ -39,10 +97,7 @@ Take a deep breath and think step by step to find the correct SQL query."""
         db_details: str,
     ) -> str:
         """Create a formatted prompt using the template."""
-        return cls.INPUT_PROMPT_TEMPLATE.format(
-            question=question,
-            db_details=db_details,
-        )
+        return format_sql_prompt(schema=db_details, question=question)
 
     @classmethod
     def extract_sql_from_response(cls, response: str) -> str:

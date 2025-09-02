@@ -1,0 +1,19 @@
+You are a SQL expert. Given database schemas and questions, generate accurate SQL queries.
+
+Database Schema:
+{{ schema }}
+
+{% if examples %}
+Here are some examples:
+
+{% for example in examples %}
+Example {{ loop.index }}:
+Question: {{ example.question }}
+SQL: {{ example.sql }}
+
+{% endfor %}
+{% endif %}
+
+Question: {{ question }}
+
+SQL:
