@@ -2,7 +2,10 @@
 
 import argparse
 import json
+import os
 import re
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from datasets import load_dataset
@@ -16,6 +19,55 @@ from ehr_r1.utils.schema import get_schema
 from ehr_r1.utils.prompts import format_sql_prompt
 
 logger = get_logger(__name__)
+
+
+def create_output_structure(output_dir: str, model_name: str) -> dict:
+    """Create organized output directory structure.
+    
+    Args:
+        output_dir: Base output directory
+        model_name: Model name for organizing results
+        
+    Returns:
+        Dictionary with paths for different output files
+    """
+    # Extract model name from path (e.g., "MPX0222forHF/SQL-R1-3B" -> "SQL-R1-3B")
+    model_short_name = model_name.split("/")[-1]
+    
+    # Create timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Create directory structure
+    model_dir = Path(output_dir) / model_short_name
+    run_dir = model_dir / f"run_{timestamp}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Define output paths (simplified)
+    paths = {
+        "run_dir": str(run_dir),
+        "results": str(run_dir / "results.json"),
+        "log": str(run_dir / "evaluation.log"),
+    }
+    
+    return paths
+
+
+def setup_logging(log_path: str):
+    """Setup logging to file and console."""
+    import logging
+    
+    # Create file handler
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.INFO)
+    
+    # Create formatter
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    file_handler.setFormatter(formatter)
+    
+    # Add handler to logger
+    logging.getLogger().addHandler(file_handler)
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,10 +92,10 @@ def parse_args() -> argparse.Namespace:
         help="Number of samples to evaluate",
     )
     parser.add_argument(
-        "--output_path",
+        "--output_dir",
         type=str,
-        default="./evaluation_results.json",
-        help="Path to save evaluation results",
+        default="./results",
+        help="Directory to save evaluation results",
     )
     parser.add_argument(
         "--max_length",
@@ -70,6 +122,12 @@ def parse_args() -> argparse.Namespace:
         choices=["omnisql_prompt.jinja2", "simple_sql_prompt.jinja2", "few_shot_prompt.jinja2"],
         help="Prompt template to use",
     )
+    parser.add_argument(
+        "--db_path",
+        type=str,
+        default="data/mimic_iv/mimic_iv.sqlite",
+        help="Path to the database for execution accuracy evaluation",
+    )
     return parser.parse_args()
 
 
@@ -89,7 +147,16 @@ def parse_response(response: str) -> str:
     if sql_blocks:
         # Extract the last SQL query in the response text and remove extra whitespace characters
         last_sql = sql_blocks[-1].strip()
-        return last_sql
+        
+        # Remove SQL comments (lines starting with --)
+        lines = last_sql.split('\n')
+        sql_lines = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith('--'):
+                sql_lines.append(line)
+        
+        return '\n'.join(sql_lines)
     else:
         return ""
 
@@ -125,10 +192,30 @@ def main() -> None:
     """Main evaluation function."""
     args = parse_args()
 
+    # Create output directory structure
+    output_paths = create_output_structure(args.output_dir, args.model_name)
+    
+    # Setup logging
+    setup_logging(output_paths["log"])
+    
     logger.info(f"Starting evaluation with model: {args.model_name}")
+    logger.info(f"Output directory: {output_paths['run_dir']}")
     logger.info(f"Tensor parallel size: {args.tensor_parallel_size}")
     logger.info(f"Temperature: {args.temperature}")
     logger.info(f"Max length: {args.max_length}")
+    
+    # Prepare configuration for later inclusion in results
+    config = {
+        "model_name": args.model_name,
+        "dataset_path": args.dataset_path,
+        "num_samples": args.num_samples,
+        "max_length": args.max_length,
+        "tensor_parallel_size": args.tensor_parallel_size,
+        "temperature": args.temperature,
+        "prompt_template": args.prompt_template,
+        "db_path": args.db_path,
+        "timestamp": datetime.now().isoformat(),
+    }
 
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
@@ -243,10 +330,22 @@ def main() -> None:
 
     # Parse predictions
     predictions = []
-    for output in outputs:
+    sample_results = []
+    
+    for i, output in enumerate(outputs):
         response = output.outputs[0].text
         pred_sql = parse_response(response)
         predictions.append(pred_sql)
+        
+        # Save sample details for inclusion in final results
+        if i < len(targets):
+            sample_detail = {
+                "sample_id": i,
+                "predicted_sql": pred_sql,
+                "target_sql": targets[i],
+                "raw_response": response,
+            }
+            sample_results.append(sample_detail)
 
     # Print sample for debugging
     for i in range(min(3, len(predictions))):
@@ -257,22 +356,58 @@ def main() -> None:
 
     # Compute metrics using existing evaluator
     if predictions and targets:
-        evaluator = EHRSQLEvaluator()
-        results = evaluator.evaluate(predictions, targets, args.output_path)
+        # Initialize evaluator with database path for execution accuracy
+        evaluator = EHRSQLEvaluator(db_path=args.db_path)
+        results = evaluator.evaluate(predictions, targets, output_paths["results"])
 
-        # Add model info to results
-        results.update(
-            {
-                "model_name": args.model_name,
-                "dataset_path": args.dataset_path,
-            }
-        )
+        # Create comprehensive results
+        final_results = {
+            "config": config,
+            "evaluation_metrics": {
+                "exact_match_accuracy": results.get("exact_match_accuracy", 0),
+                "execution_accuracy": results.get("execution_accuracy", 0),
+                "predicted_success_rate": results.get("predicted_success_rate", 0),
+                "ground_truth_success_rate": results.get("ground_truth_success_rate", 0),
+                "total_predictions": results.get("total_predictions", 0),
+                "non_empty_predictions": results.get("non_empty_predictions", 0),
+            },
+            "sample_results": sample_results,
+        }
+        
+        # Add detailed execution results if available
+        if "detailed_results" in results:
+            final_results["detailed_execution_results"] = results["detailed_results"]
+        
+        # Save comprehensive results
+        with open(output_paths["results"], "w") as f:
+            json.dump(final_results, f, indent=2)
 
         logger.info(f"\n=== EVALUATION RESULTS ===")
         logger.info(
             f"Exact Match Accuracy: {results.get('exact_match_accuracy', 'N/A'):.4f}"
         )
-        logger.info(f"Results saved to: {args.output_path}")
+        if 'execution_accuracy' in results:
+            logger.info(
+                f"Execution Accuracy: {results.get('execution_accuracy', 'N/A'):.4f}"
+            )
+            logger.info(
+                f"Predicted Success Rate: {results.get('predicted_success_rate', 'N/A'):.4f}"
+            )
+            logger.info(
+                f"Ground Truth Success Rate: {results.get('ground_truth_success_rate', 'N/A'):.4f}"
+            )
+        logger.info(f"Results saved to: {output_paths['results']}")
+        
+        # Clean up any temporary detailed files created by evaluator
+        temp_detailed_path = output_paths["results"].replace(".json", "_detailed.json")
+        if os.path.exists(temp_detailed_path):
+            os.remove(temp_detailed_path)
+        
+        # Final summary
+        logger.info(f"\n=== EVALUATION SUMMARY ===")
+        logger.info(f"Model: {args.model_name}")
+        logger.info(f"Samples evaluated: {len(predictions)}")
+        logger.info(f"All results saved in: {output_paths['run_dir']}")
 
     else:
         logger.error("No valid predictions generated!")
