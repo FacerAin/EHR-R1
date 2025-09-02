@@ -153,7 +153,6 @@ def main() -> None:
     # Initialize VLLM
     llm = LLM(
         model=args.model_name,
-        dtype="bfloat16",
         tensor_parallel_size=args.tensor_parallel_size,
         max_model_len=max_model_len,
         gpu_memory_utilization=0.92,
