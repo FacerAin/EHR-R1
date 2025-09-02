@@ -74,38 +74,46 @@ def read_csv(data_dir, filename, columns=None, lower=True, filter_dict=None, dty
             sys.exit(1)
 
     if memory_efficient:
-        import dask.dataframe as dd
-        from dask.diagnostics import ProgressBar
+        try:
+            import dask.dataframe as dd
+            from dask.diagnostics import ProgressBar
 
-        ProgressBar().register()
+            ProgressBar().register()
 
-        if filepath.endswith("gz"):
-            compression = "gzip"
-        else:
-            compression = None
+            if filepath.endswith("gz"):
+                compression = "gzip"
+            else:
+                compression = None
 
-        if dtype:
-            df = dd.read_csv(filepath, blocksize=25e6, dtype=dtype, compression=compression)
-        else:
-            df = dd.read_csv(filepath, blocksize=25e6, compression=compression)
+            if dtype:
+                df = dd.read_csv(filepath, blocksize=25e6, dtype=dtype, compression=compression)
+            else:
+                df = dd.read_csv(filepath, blocksize=25e6, compression=compression)
 
-        if columns is not None:
-            df = df[columns]
-        if filter_dict is not None:
-            for key in filter_dict:
-                df = df[df[key].isin(filter_dict[key])]
-        df = df.compute()
-    else:
+            if columns is not None:
+                df = df[columns]
+            if filter_dict is not None:
+                for key in filter_dict:
+                    df = df[df[key].isin(filter_dict[key])]
+            df = df.compute()
+        except ImportError:
+            print("Dask not available, falling back to pandas")
+            memory_efficient = False
+    
+    if not memory_efficient:
         try:
             df = pd.read_csv(filepath, usecols=columns)
         except: # demo dbs have lowercased column names
-            df = pd.read_csv(filepath, usecols=[l.lower() for l in columns])
-            df.columns = [l.upper() for l in df.columns]
+            if columns is not None:
+                df = pd.read_csv(filepath, usecols=[l.lower() for l in columns])
+                df.columns = [l.upper() for l in df.columns]
+            else:
+                df = pd.read_csv(filepath)
         if filter_dict is not None:
             for key in filter_dict:
                 df = df[df[key].isin(filter_dict[key])]
     if lower:
-        df = df.applymap(lambda x: x.lower().strip() if pd.notnull(x) and type(x) == str else x)
+        df = df.map(lambda x: x.lower().strip() if pd.notnull(x) and type(x) == str else x)
     return df
 
 
