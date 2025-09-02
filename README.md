@@ -70,11 +70,18 @@ uv run python src/ehr_r1/evaluate.py --dataset_path /path/to/your/data.json
 
 # Adjust generation parameters
 uv run python src/ehr_r1/evaluate.py --temperature 0.1 --max_length 2048 --num_samples 100
+
+# Use different prompt templates
+uv run python src/ehr_r1/evaluate.py --prompt_template simple_sql_prompt.jinja2
+uv run python src/ehr_r1/evaluate.py --prompt_template few_shot_prompt.jinja2
 ```
 
 **Evaluation Features:**
 - **vLLM Integration**: Fast batch inference with GPU parallelism
 - **Local Dataset Support**: Works with JSON files containing question-SQL pairs
+- **Official OmniSQL Format**: Follows the exact prompt format from official OmniSQL repository
+- **Template-based Prompts**: Jinja2 template system for easy prompt customization and management
+- **Detailed Database Schema**: Uses complete CREATE TABLE statements with column descriptions and examples
 - **Comprehensive Metrics**: Exact match accuracy and SQL component analysis
 - **Structured Logging**: Detailed progress tracking and debugging information
 - **Flexible Configuration**: Adjustable sampling parameters and model settings
@@ -97,10 +104,15 @@ src/ehr_r1/
 │   └── __init__.py
 ├── utils/                       # Utility modules
 │   ├── config.py               # Configuration management
-│   ├── prompts.py              # Prompt templates
+│   ├── prompts.py              # Prompt templates and rendering
 │   ├── sql_executor.py         # SQL execution utilities
 │   ├── logger.py               # Logging configuration
+│   ├── schema.py               # Database schema definitions
 │   └── __init__.py
+├── templates/                   # Jinja2 template files
+│   ├── omnisql_prompt.jinja2   # Official OmniSQL format
+│   ├── simple_sql_prompt.jinja2 # Simple SQL prompt
+│   └── few_shot_prompt.jinja2  # Few-shot learning prompt
 ├── train.py                     # Main training script
 ├── evaluate.py                  # Main evaluation script
 ├── inference.py                 # Model inference

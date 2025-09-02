@@ -12,6 +12,8 @@ from vllm import LLM, SamplingParams
 
 from ehr_r1.evaluation.evaluator import EHRSQLEvaluator
 from ehr_r1.utils.logger import get_logger
+from ehr_r1.utils.schema import get_schema
+from ehr_r1.utils.prompts import format_sql_prompt
 
 logger = get_logger(__name__)
 
@@ -60,6 +62,13 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.1,
         help="Sampling temperature",
+    )
+    parser.add_argument(
+        "--prompt_template",
+        type=str,
+        default="omnisql_prompt.jinja2",
+        choices=["omnisql_prompt.jinja2", "simple_sql_prompt.jinja2", "few_shot_prompt.jinja2"],
+        help="Prompt template to use",
     )
     return parser.parse_args()
 
@@ -130,7 +139,6 @@ def main() -> None:
 
     # Set up VLLM parameters
     max_model_len = 8192
-    max_input_len = 6144
     max_output_len = args.max_length
 
     logger.info(f"Max model length: {max_model_len}")
@@ -168,8 +176,15 @@ def main() -> None:
         else:
             dataset = data
 
+        # Load corresponding labels (SQL queries)
+        labels_path = args.dataset_path.replace("data.json", "label.json")
+        logger.info(f"Loading labels from: {labels_path}")
+        
+        with open(labels_path, "r") as f:
+            labels = json.load(f)
+
     except Exception as e:
-        logger.error(f"Could not load {args.dataset_path}. Error: {e}")
+        logger.error(f"Could not load dataset or labels. Error: {e}")
         return
 
     # Limit samples if specified
@@ -185,25 +200,28 @@ def main() -> None:
     for i, example in enumerate(tqdm(dataset, desc="Preparing prompts")):
         try:
             # Extract fields from EHRSQL dataset structure
+            example_id = example.get("id", "")
             question = example.get("question", "")
-            # For local dataset, we might not have schema in each example
-            # You may need to load schema separately or modify this
-            schema = example.get("schema", example.get("db_schema", "mimic_iv"))
-            target_sql = example.get("query", example.get("sql", ""))
+            # Get database schema - use from example or default to MIMIC-IV
+            db_name = example.get("db_id", example.get("database", "mimic_iv"))
+            schema = get_schema(db_name)
+            if not schema:
+                logger.warning(f"Schema not found for database: {db_name}, using MIMIC-IV")
+                schema = get_schema("mimic_iv") or "mimic_iv"  # Fallback to string if still None
+            
+            # Get target SQL from labels using the example ID
+            target_sql = labels.get(example_id, "")
 
             if not question:
                 logger.warning(f"Skipping sample {i}: missing question")
                 continue
+            
+            if not target_sql:
+                logger.warning(f"Skipping sample {i}: missing target SQL for ID {example_id}")
+                continue
 
-            # Format prompt for OmniSQL
-            prompt = f"""Given the database schema below, write a SQL query to answer the question.
-
-Schema:
-{schema}
-
-Question: {question}
-
-SQL:"""
+            # Format prompt using template
+            prompt = format_sql_prompt(schema=schema, question=question, template=args.prompt_template)
 
             # Apply chat template
             chat_prompt = tokenizer.apply_chat_template(
@@ -213,7 +231,7 @@ SQL:"""
             )
 
             chat_prompts.append(chat_prompt)
-            targets.append(target_sql if target_sql else "")
+            targets.append(target_sql)
 
         except Exception as e:
             logger.error(f"Error processing sample {i}: {e}")
