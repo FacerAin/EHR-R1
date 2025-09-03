@@ -323,8 +323,8 @@ def main() -> None:
                 logger.warning(f"Skipping sample {i}: missing question")
                 continue
             
-            if not target_sql:
-                logger.warning(f"Skipping sample {i}: missing target SQL for ID {example_id}")
+            if not target_sql or target_sql.strip().lower() == "null": # TODO: Need to evaluate "Unanswerable" cases
+                logger.warning(f"Skipping sample {i}: missing or null target SQL for ID {example_id}")
                 continue
 
             # Format prompt using template
