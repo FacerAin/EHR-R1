@@ -1,11 +1,17 @@
 """Main training script."""
 
 import argparse
+import os
 from typing import Optional
+
+from dotenv import load_dotenv
 
 from ehr_r1.data.ehrsql_dataset import EHRSQLDataset
 from ehr_r1.training.grpo_trainer import EHRSQLGRPOTrainer
 from ehr_r1.utils.config import DataConfig, ModelConfig, TrainingConfig
+from ehr_r1.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +25,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data_path",
         type=str,
+        default="data/mimic_iv/train/data.json",
         help="Path to training data",
     )
     parser.add_argument(
@@ -30,63 +37,153 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model_name",
         type=str,
-        default="microsoft/DialoGPT-medium",
+        default="MPX0222forHF/SQL-R1-3B",
         help="Base model name",
     )
     parser.add_argument(
         "--num_epochs",
         type=int,
-        default=3,
+        default=1,
         help="Number of training epochs",
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=1e-5,
+        help="Learning rate",
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=4,
+        help="Per device train batch size",
+    )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=4,
+        help="Gradient accumulation steps",
+    )
+    parser.add_argument(
+        "--max_length",
+        type=int,
+        default=2048,
+        help="Maximum sequence length",
+    )
+    parser.add_argument(
+        "--max_prompt_length",
+        type=int,
+        default=1024,
+        help="Maximum prompt length",
+    )
+    parser.add_argument(
+        "--db_path",
+        type=str,
+        default="data/mimic_iv/mimic_iv.sqlite",
+        help="Path to database for reward computation",
+    )
+    parser.add_argument(
+        "--use_wandb",
+        action="store_true",
+        default=False,
+        help="Use Weights & Biases for logging",
+    )
+    parser.add_argument(
+        "--wandb_project",
+        type=str,
+        default="ehr-r1",
+        help="Weights & Biases project name",
+    )
+    parser.add_argument(
+        "--wandb_run_name",
+        type=str,
+        help="Weights & Biases run name",
+    )
+    parser.add_argument(
+        "--wandb_entity",
+        type=str,
+        help="Weights & Biases entity (team/username)",
     )
     return parser.parse_args()
 
 
 def main() -> None:
     """Main training function."""
+    # Load environment variables
+    load_dotenv()
+    
+    # Set HuggingFace cache if specified
+    hf_home = os.getenv("HF_HOME")
+    if hf_home:
+        hf_home = os.path.expandvars(hf_home)
+        os.environ["HF_HOME"] = hf_home
+        logger.info(f"HuggingFace cache directory: {hf_home}")
+    
     args = parse_args()
+    
+    logger.info("Starting EHR-R1 GRPO training")
+    logger.info(f"Model: {args.model_name}")
+    logger.info(f"Data path: {args.data_path}")
+    logger.info(f"Output dir: {args.output_dir}")
+    logger.info(f"Epochs: {args.num_epochs}")
+    logger.info(f"Batch size: {args.batch_size}")
+    logger.info(f"Learning rate: {args.learning_rate}")
+    
+    # Create output directory
+    os.makedirs(args.output_dir, exist_ok=True)
 
-    # Initialize configurations
-    training_config = TrainingConfig(
+    # Initialize trainer with all parameters
+    trainer = EHRSQLGRPOTrainer(
         model_name=args.model_name,
-        num_train_epochs=args.num_epochs,
-        output_dir=args.output_dir,
+        learning_rate=args.learning_rate,
+        per_device_train_batch_size=args.batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        grpo_epochs=args.num_epochs,
+        max_length=args.max_length,
+        max_prompt_length=args.max_prompt_length,
+        use_wandb=args.use_wandb,
+        db_path=args.db_path,
+        wandb_project=args.wandb_project,
+        wandb_run_name=args.wandb_run_name,
     )
 
-    data_config = DataConfig(
-        train_data_path=args.data_path,
-    )
-
-    model_config = ModelConfig(
-        model_name=args.model_name,
-    )
+    # Setup models first
+    logger.info("Setting up models...")
+    trainer.setup_models()
 
     # Load dataset
+    logger.info("Loading dataset...")
     dataset = EHRSQLDataset(
-        data_path=data_config.train_data_path,
-        max_length=data_config.max_length,
+        data_path=args.data_path,
+        tokenizer=trainer.tokenizer,
+        max_length=args.max_length,
     )
+    
+    logger.info(f"Loaded {len(dataset)} training examples")
 
-    # Initialize trainer
-    trainer = EHRSQLGRPOTrainer(
-        model_name=training_config.model_name,
-        learning_rate=training_config.learning_rate,
-        per_device_train_batch_size=training_config.per_device_train_batch_size,
-        use_wandb=training_config.use_wandb,
-    )
-
-    # Setup models and trainer
-    trainer.setup_models()
+    # Setup trainer with dataset
+    logger.info("Setting up trainer...")
     trainer.setup_trainer(dataset)
 
+    # Note: Wandb is now initialized in the trainer itself
+
     # Start training
-    trainer.train(
-        dataset=dataset,
-        num_epochs=training_config.num_train_epochs,
-        save_steps=training_config.save_steps,
-        eval_steps=training_config.eval_steps,
-        output_dir=training_config.output_dir,
-    )
+    logger.info("Starting training...")
+    try:
+        trainer.train(
+            dataset=dataset,
+            num_epochs=args.num_epochs,
+            output_dir=args.output_dir,
+        )
+        logger.info("Training completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"Training failed: {e}")
+        raise
+    
+    finally:
+        # Cleanup is handled by the trainer
+        pass
 
 
 if __name__ == "__main__":
