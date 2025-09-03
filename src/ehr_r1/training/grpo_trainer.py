@@ -8,7 +8,8 @@ import torch
 import wandb
 from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from trl import GRPOConfig, GRPOTrainer
+from trl.trainer.grpo_config import GRPOConfig
+from trl.trainer.grpo_trainer import GRPOTrainer
 
 from ..models.reward_model import EHRSQLRewardModel
 from ..utils.logger import get_logger
@@ -45,19 +46,20 @@ class EHRSQLGRPOTrainer:
 
         # Initialize GRPO configuration
         self.config = GRPOConfig(
-            model_name=model_name,
             learning_rate=learning_rate,
             per_device_train_batch_size=per_device_train_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
             num_train_epochs=grpo_epochs,
-            max_length=max_length,
             max_prompt_length=max_prompt_length,
-            log_with="wandb" if use_wandb else None,
+            max_completion_length=max_length - max_prompt_length,
+            report_to="wandb" if use_wandb else None,
             beta=beta,
             save_steps=500,
             eval_steps=500,
             logging_steps=10,
             remove_unused_columns=False,
+            output_dir="./outputs",
+            do_train=True,
         )
 
         self.tokenizer = None
@@ -127,13 +129,38 @@ class EHRSQLGRPOTrainer:
 
         logger.info("Setting up GRPO trainer")
 
+        # Define reward function for GRPO (expects prompts and completions)
+        def reward_function(prompts, completions):
+            """Compute rewards for a batch of prompts and completions."""
+            # For each prompt, get the corresponding target SQL from dataset
+            rewards = []
+            for i, (prompt, completion) in enumerate(zip(prompts, completions)):
+                # Get target SQL from dataset sample
+                if i < len(dataset):
+                    sample = dataset[i]
+                    target_sql = sample.get("target_sql", "")
+                    question = sample.get("question", "")
+                    
+                    # Compute reward
+                    reward = self.reward_model.compute_reward(
+                        predicted_sql=self.parse_sql_response(completion),
+                        target_sql=target_sql,
+                        question=question,
+                    )
+                    rewards.append(reward)
+                else:
+                    # Fallback reward if no matching sample
+                    rewards.append(self.reward_failure)
+            
+            return rewards
+
         # Create GRPO trainer
         self.grpo_trainer = GRPOTrainer(
-            config=self.config,
             model=self.model,
-            ref_model=self.ref_model,
-            tokenizer=self.tokenizer,
+            reward_funcs=reward_function,
+            args=self.config,
             train_dataset=dataset,
+            processing_class=self.tokenizer,
         )
 
         logger.info("GRPO trainer setup complete")
@@ -194,7 +221,6 @@ class EHRSQLGRPOTrainer:
                     "per_device_train_batch_size": self.config.per_device_train_batch_size,
                     "gradient_accumulation_steps": self.config.gradient_accumulation_steps,
                     "num_train_epochs": self.config.num_train_epochs,
-                    "max_length": self.config.max_length,
                     "max_prompt_length": self.config.max_prompt_length,
                     "beta": self.config.beta,
                     "reward_success": self.reward_success,
@@ -246,7 +272,6 @@ class EHRSQLGRPOTrainer:
 
     def train(
         self,
-        dataset,
         num_epochs: int = 1,
         save_steps: int = 500,
         eval_steps: int = 500,

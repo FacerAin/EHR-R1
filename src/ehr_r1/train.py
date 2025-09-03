@@ -171,7 +171,6 @@ def main() -> None:
     logger.info("Starting training...")
     try:
         trainer.train(
-            dataset=dataset,
             num_epochs=args.num_epochs,
             output_dir=args.output_dir,
         )
