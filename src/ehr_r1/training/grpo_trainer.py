@@ -8,6 +8,7 @@ import wandb
 from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
+import numpy as np
 
 from ..models.reward_model import EHRSQLRewardModel
 from ..utils.logger import get_logger
@@ -181,9 +182,7 @@ class EHRSQLGRPOTrainer:
     
     def _setup_wandb(self):
         """Setup Weights & Biases logging."""
-        try:
-            import wandb
-            
+        try:            
             # Initialize wandb
             wandb.init(
                 project=self.wandb_project,
@@ -217,7 +216,6 @@ class EHRSQLGRPOTrainer:
         """Log training metrics to wandb."""
         if self.use_wandb:
             try:
-                import wandb
                 wandb.log(metrics, step=step)
             except Exception as e:
                 logger.warning(f"Failed to log metrics to wandb: {e}")
@@ -225,10 +223,7 @@ class EHRSQLGRPOTrainer:
     def _log_reward_distribution(self, rewards: List[float], step: int):
         """Log reward distribution to wandb."""
         if self.use_wandb and rewards:
-            try:
-                import wandb
-                import numpy as np
-                
+            try:                
                 wandb.log({
                     "reward/mean": np.mean(rewards),
                     "reward/std": np.std(rewards),
