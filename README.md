@@ -89,8 +89,6 @@ uv run evaluate --num_samples 500 --db_path data/mimic_iv/mimic_iv.sqlite
 | **SQL-R1-7B** | 7B | **37.3%** |
 | **SQL-R1-3B** | 3B | 24.0% |
 
-*Evaluation performed with temperature=0.1, using omnisql_prompt.jinja2 template*
-
 ### Results Organization
 
 Results are organized by model and timestamp:
