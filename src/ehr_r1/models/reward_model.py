@@ -24,11 +24,11 @@ class EHRSQLRewardModel:
         self.failure_reward = failure_reward
         self.execution_match_bonus = execution_match_bonus
         self.sql_executor = SQLExecutor(db_path)
-        
+
     def connect(self):
         """Connect to database."""
         return self.sql_executor.connect()
-    
+
     def disconnect(self):
         """Disconnect from database."""
         self.sql_executor.disconnect()
@@ -42,37 +42,41 @@ class EHRSQLRewardModel:
     ) -> float:
         """
         Compute reward for a predicted SQL query.
-        
+
         Args:
             predicted_sql: Generated SQL query
             target_sql: Ground truth SQL query
             question: Original question (unused for now)
             schema: Database schema (unused for now)
-            
+
         Returns:
             Reward score
         """
         if not predicted_sql.strip():
             return self.failure_reward
-        
+
         # Execute predicted SQL
-        pred_success, pred_result, pred_error = self.sql_executor.execute_query(predicted_sql)
-        
+        pred_success, pred_result, pred_error = self.sql_executor.execute_query(
+            predicted_sql
+        )
+
         if not pred_success:
             # SQL execution failed - negative reward
             return self.failure_reward
-        
+
         # SQL executed successfully - positive reward
         reward = self.success_reward
-        
+
         # Check if we have ground truth to compare against
         if target_sql.strip():
-            target_success, target_result, target_error = self.sql_executor.execute_query(target_sql)
-            
+            target_success, target_result, target_error = (
+                self.sql_executor.execute_query(target_sql)
+            )
+
             if target_success and pred_result == target_result:
                 # Results match - bonus reward
                 reward += self.execution_match_bonus
-        
+
         return reward
 
     def compute_batch_rewards(
@@ -84,14 +88,14 @@ class EHRSQLRewardModel:
     ) -> List[float]:
         """Compute rewards for a batch of predictions."""
         rewards = []
-        
+
         for i, (pred_sql, target_sql) in enumerate(zip(predicted_sqls, target_sqls)):
             question = questions[i] if questions else ""
             schema = schemas[i] if schemas else ""
-            
+
             reward = self.compute_reward(pred_sql, target_sql, question, schema)
             rewards.append(reward)
-        
+
         return rewards
 
 

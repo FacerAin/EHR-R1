@@ -111,16 +111,16 @@ def main() -> None:
     """Main training function."""
     # Load environment variables
     load_dotenv()
-    
+
     # Set HuggingFace cache if specified
     hf_home = os.getenv("HF_HOME")
     if hf_home:
         hf_home = os.path.expandvars(hf_home)
         os.environ["HF_HOME"] = hf_home
         logger.info(f"HuggingFace cache directory: {hf_home}")
-    
+
     args = parse_args()
-    
+
     logger.info("Starting EHR-R1 GRPO training")
     logger.info(f"Model: {args.model_name}")
     logger.info(f"Data path: {args.data_path}")
@@ -128,7 +128,7 @@ def main() -> None:
     logger.info(f"Epochs: {args.num_epochs}")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
-    
+
     # Create output directory
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -158,7 +158,7 @@ def main() -> None:
         tokenizer=trainer.tokenizer,
         max_length=args.max_length,
     )
-    
+
     logger.info(f"Loaded {len(dataset)} training examples")
 
     # Setup trainer with dataset
@@ -176,11 +176,11 @@ def main() -> None:
             output_dir=args.output_dir,
         )
         logger.info("Training completed successfully!")
-        
+
     except Exception as e:
         logger.error(f"Training failed: {e}")
         raise
-    
+
     finally:
         # Cleanup is handled by the trainer
         pass

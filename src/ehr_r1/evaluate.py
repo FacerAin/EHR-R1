@@ -9,47 +9,46 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
-
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
 
 from ehr_r1.evaluation.evaluator import EHRSQLEvaluator
 from ehr_r1.utils.logger import get_logger
-from ehr_r1.utils.schema import get_schema
 from ehr_r1.utils.prompts import format_prompt
+from ehr_r1.utils.schema import get_schema
 
 logger = get_logger(__name__)
 
 
 def create_output_structure(output_dir: str, model_name: str) -> dict:
     """Create organized output directory structure.
-    
+
     Args:
         output_dir: Base output directory
         model_name: Model name for organizing results
-        
+
     Returns:
         Dictionary with paths for different output files
     """
     # Extract model name from path (e.g., "MPX0222forHF/SQL-R1-3B" -> "SQL-R1-3B")
     model_short_name = model_name.split("/")[-1]
-    
+
     # Create timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    
+
     # Create directory structure
     model_dir = Path(output_dir) / model_short_name
     run_dir = model_dir / f"run_{timestamp}"
     run_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Define output paths (simplified)
     paths = {
         "run_dir": str(run_dir),
         "results": str(run_dir / "results.json"),
         "log": str(run_dir / "evaluation.log"),
     }
-    
+
     return paths
 
 
@@ -58,13 +57,13 @@ def setup_logging(log_path: str):
     # Create file handler
     file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(logging.INFO)
-    
+
     # Create formatter
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     file_handler.setFormatter(formatter)
-    
+
     # Add handler to logger
     logging.getLogger().addHandler(file_handler)
 
@@ -118,7 +117,11 @@ def parse_args() -> argparse.Namespace:
         "--prompt_template",
         type=str,
         default="omnisql_prompt.jinja2",
-        choices=["omnisql_prompt.jinja2", "simple_sql_prompt.jinja2", "few_shot_prompt.jinja2"],
+        choices=[
+            "omnisql_prompt.jinja2",
+            "simple_sql_prompt.jinja2",
+            "few_shot_prompt.jinja2",
+        ],
         help="Prompt template to use",
     )
     parser.add_argument(
@@ -152,16 +155,16 @@ def parse_response(response: str) -> str:
     if sql_blocks:
         # Extract the last SQL query in the response text and remove extra whitespace characters
         last_sql = sql_blocks[-1].strip()
-        
+
         # Remove SQL comments (lines starting with --)
-        lines = last_sql.split('\n')
+        lines = last_sql.split("\n")
         sql_lines = []
         for line in lines:
             line = line.strip()
-            if line and not line.startswith('--'):
+            if line and not line.startswith("--"):
                 sql_lines.append(line)
-        
-        return '\n'.join(sql_lines)
+
+        return "\n".join(sql_lines)
     else:
         return ""
 
@@ -197,26 +200,26 @@ def main() -> None:
     """Main evaluation function."""
     # Load environment variables
     load_dotenv()
-    
+
     # Set HuggingFace cache directory if specified
     if os.getenv("HF_HOME"):
         os.environ["HF_HOME"] = os.getenv("HF_HOME")
         logger.info(f"HuggingFace cache directory: {os.getenv('HF_HOME')}")
-    
+
     args = parse_args()
 
     # Create output directory structure
     output_paths = create_output_structure(args.output_dir, args.model_name)
-    
+
     # Setup logging
     setup_logging(output_paths["log"])
-    
+
     logger.info(f"Starting evaluation with model: {args.model_name}")
     logger.info(f"Output directory: {output_paths['run_dir']}")
     logger.info(f"Tensor parallel size: {args.tensor_parallel_size}")
     logger.info(f"Temperature: {args.temperature}")
     logger.info(f"Max length: {args.max_length}")
-    
+
     # Prepare configuration for later inclusion in results
     config = {
         "model_name": args.model_name,
@@ -253,11 +256,11 @@ def main() -> None:
     # Get VLLM settings from environment
     vllm_cache_dir = os.getenv("VLLM_CACHE_ROOT", "")
     gpu_memory_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92"))
-    
+
     # Set VLLM cache directory
     os.environ["VLLM_CACHE_ROOT"] = vllm_cache_dir
     logger.info(f"VLLM cache directory: {vllm_cache_dir}")
-    
+
     # Initialize VLLM
     llm = LLM(
         model=args.model_name,
@@ -286,7 +289,7 @@ def main() -> None:
         # Load corresponding labels (SQL queries)
         labels_path = args.dataset_path.replace("data.json", "label.json")
         logger.info(f"Loading labels from: {labels_path}")
-        
+
         with open(labels_path, "r") as f:
             labels = json.load(f)
 
@@ -313,22 +316,35 @@ def main() -> None:
             db_name = example.get("db_id", example.get("database", "mimic_iv"))
             schema = get_schema(db_name)
             if not schema:
-                logger.warning(f"Schema not found for database: {db_name}, using MIMIC-IV")
-                schema = get_schema("mimic_iv") or "mimic_iv"  # Fallback to string if still None
-            
+                logger.warning(
+                    f"Schema not found for database: {db_name}, using MIMIC-IV"
+                )
+                schema = (
+                    get_schema("mimic_iv") or "mimic_iv"
+                )  # Fallback to string if still None
+
             # Get target SQL from labels using the example ID
             target_sql = labels.get(example_id, "")
 
             if not question:
                 logger.warning(f"Skipping sample {i}: missing question")
                 continue
-            
-            if not target_sql or target_sql.strip().lower() == "null": # TODO: Need to evaluate "Unanswerable" cases
-                logger.warning(f"Skipping sample {i}: missing or null target SQL for ID {example_id}")
+
+            if (
+                not target_sql or target_sql.strip().lower() == "null"
+            ):  # TODO: Need to evaluate "Unanswerable" cases
+                logger.warning(
+                    f"Skipping sample {i}: missing or null target SQL for ID {example_id}"
+                )
                 continue
 
             # Format prompt using template
-            prompt = format_prompt(template_name=args.prompt_template, schema=schema, question=question, current_time=args.current_time)
+            prompt = format_prompt(
+                template_name=args.prompt_template,
+                schema=schema,
+                question=question,
+                current_time=args.current_time,
+            )
 
             # Apply chat template
             chat_prompt = tokenizer.apply_chat_template(
@@ -352,12 +368,12 @@ def main() -> None:
     # Parse predictions
     predictions = []
     sample_results = []
-    
+
     for i, output in enumerate(outputs):
         response = output.outputs[0].text
         pred_sql = parse_response(response)
         predictions.append(pred_sql)
-        
+
         # Save sample details for inclusion in final results
         if i < len(targets):
             sample_detail = {
@@ -382,19 +398,37 @@ def main() -> None:
         results = evaluator.evaluate(predictions, targets, output_paths["results"])
 
         # Add execution details to sample results
-        if "detailed_results" in results and len(results["detailed_results"]) == len(sample_results):
+        if "detailed_results" in results and len(results["detailed_results"]) == len(
+            sample_results
+        ):
             for i, execution_detail in enumerate(results["detailed_results"]):
                 if i < len(sample_results):
-                    sample_results[i].update({
-                        "predicted_execution_success": execution_detail.get("predicted_success", False),
-                        "predicted_execution_result": execution_detail.get("predicted_result", None),
-                        "predicted_execution_error": execution_detail.get("predicted_error", None),
-                        "target_execution_success": execution_detail.get("ground_truth_success", False),
-                        "target_execution_result": execution_detail.get("ground_truth_result", None),
-                        "target_execution_error": execution_detail.get("ground_truth_error", None),
-                        "execution_match": execution_detail.get("execution_match", False),
-                        "exact_match": execution_detail.get("exact_match", False),
-                    })
+                    sample_results[i].update(
+                        {
+                            "predicted_execution_success": execution_detail.get(
+                                "predicted_success", False
+                            ),
+                            "predicted_execution_result": execution_detail.get(
+                                "predicted_result", None
+                            ),
+                            "predicted_execution_error": execution_detail.get(
+                                "predicted_error", None
+                            ),
+                            "target_execution_success": execution_detail.get(
+                                "ground_truth_success", False
+                            ),
+                            "target_execution_result": execution_detail.get(
+                                "ground_truth_result", None
+                            ),
+                            "target_execution_error": execution_detail.get(
+                                "ground_truth_error", None
+                            ),
+                            "execution_match": execution_detail.get(
+                                "execution_match", False
+                            ),
+                            "exact_match": execution_detail.get("exact_match", False),
+                        }
+                    )
 
         # Create comprehensive results
         final_results = {
@@ -403,13 +437,15 @@ def main() -> None:
                 "exact_match_accuracy": results.get("exact_match_accuracy", 0),
                 "execution_accuracy": results.get("execution_accuracy", 0),
                 "predicted_success_rate": results.get("predicted_success_rate", 0),
-                "ground_truth_success_rate": results.get("ground_truth_success_rate", 0),
+                "ground_truth_success_rate": results.get(
+                    "ground_truth_success_rate", 0
+                ),
                 "total_predictions": results.get("total_predictions", 0),
                 "non_empty_predictions": results.get("non_empty_predictions", 0),
             },
             "sample_results": sample_results,
         }
-        
+
         # Save comprehensive results
         with open(output_paths["results"], "w") as f:
             json.dump(final_results, f, indent=2)
@@ -418,7 +454,7 @@ def main() -> None:
         logger.info(
             f"Exact Match Accuracy: {results.get('exact_match_accuracy', 'N/A'):.4f}"
         )
-        if 'execution_accuracy' in results:
+        if "execution_accuracy" in results:
             logger.info(
                 f"Execution Accuracy: {results.get('execution_accuracy', 'N/A'):.4f}"
             )
@@ -429,12 +465,12 @@ def main() -> None:
                 f"Ground Truth Success Rate: {results.get('ground_truth_success_rate', 'N/A'):.4f}"
             )
         logger.info(f"Results saved to: {output_paths['results']}")
-        
+
         # Clean up any temporary detailed files created by evaluator
         temp_detailed_path = output_paths["results"].replace(".json", "_detailed.json")
         if os.path.exists(temp_detailed_path):
             os.remove(temp_detailed_path)
-        
+
         # Final summary
         logger.info(f"\n=== EVALUATION SUMMARY ===")
         logger.info(f"Model: {args.model_name}")
