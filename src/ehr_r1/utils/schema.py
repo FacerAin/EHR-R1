@@ -2,7 +2,6 @@
 
 from typing import Dict, Optional
 
-
 # MIMIC-IV database schema based on actual database structure
 MIMIC_IV_SCHEMA = """CREATE TABLE patients (
     row_id integer, -- internal row identifier
@@ -206,31 +205,31 @@ CREATE TABLE d_icd_procedures (
 
 def get_schema(db_name: str = "mimic_iv") -> Optional[str]:
     """Get database schema by name.
-    
+
     Args:
         db_name: Database name
-        
+
     Returns:
         Database schema as CREATE TABLE statements or None if not found
     """
     schemas = {
         "mimic_iv": MIMIC_IV_SCHEMA,
     }
-    
+
     return schemas.get(db_name.lower())
 
 
 def load_schema_from_file(schema_path: str) -> str:
     """Load schema from file.
-    
+
     Args:
         schema_path: Path to schema file
-        
+
     Returns:
         Database schema content
     """
     try:
-        with open(schema_path, 'r') as f:
+        with open(schema_path, "r") as f:
             return f.read()
     except Exception as e:
         raise ValueError(f"Could not load schema from {schema_path}: {e}")

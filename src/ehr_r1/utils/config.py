@@ -3,14 +3,14 @@
 import json
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class TrainingConfig:
     """Training configuration."""
 
-    model_name: str = "microsoft/DialoGPT-medium"
+    model_name: str = "MPX0222forHF/SQL-R1-3B"
     learning_rate: float = 1e-5
     per_device_train_batch_size: int = 8
     gradient_accumulation_steps: int = 1
@@ -24,6 +24,13 @@ class TrainingConfig:
     output_dir: str = "./outputs"
     use_wandb: bool = True
     wandb_project: str = "ehr-r1"
+    wandb_run_name: Optional[str] = None
+    wandb_entity: Optional[str] = None
+    wandb_tags: Optional[List[str]] = None
+    db_path: str = "data/mimic_iv/mimic_iv.sqlite"
+    reward_success: float = 1.0
+    reward_failure: float = -1.0
+    reward_match_bonus: float = 2.0
 
 
 @dataclass
@@ -41,7 +48,7 @@ class DataConfig:
 class ModelConfig:
     """Model configuration."""
 
-    model_name: str = "microsoft/DialoGPT-medium"
+    model_name: str = "MPX0222forHF/SQL-R1-3B"
     reward_model_name: Optional[str] = None
     use_peft: bool = True
     peft_config: Optional[Dict[str, Any]] = None

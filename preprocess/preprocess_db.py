@@ -59,7 +59,7 @@ def main(args):
         mimic_writer.generate_db()
 
     else:
-        NotImplementedError
+        pass
 
 
 if __name__ == "__main__":
