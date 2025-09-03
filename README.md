@@ -76,7 +76,22 @@ uv run evaluate \
 uv run evaluate --num_samples 500 --db_path data/mimic_iv/mimic_iv.sqlite
 ```
 
-## 📊 Results Organization
+## 📊 Evaluation Results
+
+### Model Performance on MIMIC-IV (934 samples)
+
+| Model | Size | Execution Accuracy |
+|-------|------|-------------------|
+| **EHR-R1-7B (Ours)** | 7B | TBA |
+| **EHR-R1-3B (Ours)** | 3B | TBA |
+| **Arctic-Text2SQL-R1-7B** | 7B | 36.1% |
+| **OmniSQL-7B** | 7B | 34.0% |
+| **SQL-R1-7B** | 7B | **37.3%** |
+| **SQL-R1-3B** | 3B | 24.0% |
+
+*Evaluation performed with temperature=0.1, using omnisql_prompt.jinja2 template*
+
+### Results Organization
 
 Results are organized by model and timestamp:
 
