@@ -8,6 +8,8 @@ import re
 from datetime import datetime
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from tqdm import tqdm
 from transformers import AutoTokenizer
 from vllm import LLM, SamplingParams
@@ -193,6 +195,9 @@ def get_stop_token_ids(model_name: str) -> list:
 
 def main() -> None:
     """Main evaluation function."""
+    # Load environment variables
+    load_dotenv()
+    
     args = parse_args()
 
     # Create output directory structure
@@ -240,13 +245,22 @@ def main() -> None:
         stop_token_ids=stop_token_ids,
     )
 
+    # Get VLLM settings from environment
+    vllm_cache_dir = os.getenv("VLLM_CACHE_DIR", "/tmp/vllm_cache")
+    gpu_memory_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92"))
+    swap_space = int(os.getenv("VLLM_SWAP_SPACE", "42"))
+    
+    # Set VLLM cache directory
+    os.environ["VLLM_CACHE_DIR"] = vllm_cache_dir
+    logger.info(f"VLLM cache directory: {vllm_cache_dir}")
+    
     # Initialize VLLM
     llm = LLM(
         model=args.model_name,
         tensor_parallel_size=args.tensor_parallel_size,
         max_model_len=max_model_len,
-        gpu_memory_utilization=0.92,
-        swap_space=42,
+        gpu_memory_utilization=gpu_memory_util,
+        swap_space=swap_space,
         enforce_eager=True,
         disable_custom_all_reduce=True,
         trust_remote_code=True,

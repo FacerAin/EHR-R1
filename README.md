@@ -22,6 +22,25 @@ uv sync
 uv sync --extra dev
 ```
 
+### Configuration
+
+Copy the sample environment file and configure your settings:
+
+```bash
+# Copy sample environment configuration
+cp .env.sample .env
+
+# Edit configuration (optional)
+vim .env
+```
+
+**Key configuration options:**
+- `VLLM_CACHE_DIR`: Cache directory for VLLM models (default: `/tmp/vllm_cache`)
+- `VLLM_GPU_MEMORY_UTILIZATION`: GPU memory usage ratio (default: `0.92`)
+- `VLLM_SWAP_SPACE`: Swap space in GB for large models (default: `42`)
+
+**Note:** Adjust `VLLM_CACHE_DIR` to a directory with sufficient storage space for model caching.
+
 ### Training a Model
 
 ```bash
