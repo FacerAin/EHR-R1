@@ -44,31 +44,43 @@ vim .env
 ### Training a Model
 
 ```bash
-# Basic training with GRPO
-uv run train --data_path /path/to/ehrsql/data
+# Basic GRPO training
+uv run train
 
-# Training with custom configuration
+# Training with custom parameters
 uv run train \
-  --data_path /path/to/data \
+  --data_path data/mimic_iv/train/data.json \
   --model_name MPX0222forHF/SQL-R1-3B \
-  --num_epochs 5 \
-  --output_dir ./my_outputs
+  --num_epochs 3 \
+  --batch_size 4 \
+  --learning_rate 1e-5 \
+  --output_dir ./outputs \
+  --use_wandb
+
+# Training with Weights & Biases logging
+uv run train \
+  --use_wandb \
+  --wandb_project ehr-r1-training \
+  --wandb_run_name my_experiment
 ```
 
 ### Model Evaluation
 
 ```bash
 # Basic evaluation
-python -m src.ehr_r1.utils.evaluate
+uv run evaluate
 
 # Evaluate specific model
-python -m src.ehr_r1.utils.evaluate --model_name MPX0222forHF/SQL-R1-3B
+uv run evaluate --model_name MPX0222forHF/SQL-R1-3B
 
-# Custom dataset
-python -m src.ehr_r1.utils.evaluate --dataset_path data/mimic_iv/test/data.json
+# Custom dataset and parameters
+uv run evaluate \
+  --dataset_path data/mimic_iv/test/data.json \
+  --num_samples 100 \
+  --db_path data/mimic_iv/mimic_iv.sqlite
 
 # Multiple samples with execution accuracy
-python -m src.ehr_r1.utils.evaluate --num_samples 500 --db_path data/mimic_iv/mimic_iv.sqlite
+uv run evaluate --num_samples 500 --db_path data/mimic_iv/mimic_iv.sqlite
 ```
 
 ## 📊 Results Organization
@@ -169,8 +181,11 @@ See `pyproject.toml` for complete dependency list.
 Process MIMIC-IV data for training:
 
 ```bash
+# Navigate to preprocessing directory
 cd preprocess
-python preprocess_db.py \
+
+# Run preprocessing script
+uv run python preprocess_db.py \
   --data_dir /path/to/mimic-iv/csv \
   --db_name mimic_iv \
   --out_dir ../data \
