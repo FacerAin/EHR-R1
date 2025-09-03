@@ -156,6 +156,10 @@ class EHRSQLEvaluator:
             results["ground_truth_success_rate"] = exec_results[
                 "ground_truth_success_rate"
             ]
+            
+            # Include detailed results for sample-level analysis
+            if "detailed_results" in exec_results:
+                results["detailed_results"] = exec_results["detailed_results"]
 
             # Save detailed execution results if requested
             if output_file:
