@@ -198,6 +198,11 @@ def main() -> None:
     # Load environment variables
     load_dotenv()
     
+    # Set HuggingFace cache directory if specified
+    if os.getenv("HF_HOME"):
+        os.environ["HF_HOME"] = os.getenv("HF_HOME")
+        logger.info(f"HuggingFace cache directory: {os.getenv('HF_HOME')}")
+    
     args = parse_args()
 
     # Create output directory structure
@@ -246,12 +251,11 @@ def main() -> None:
     )
 
     # Get VLLM settings from environment
-    vllm_cache_dir = os.getenv("VLLM_CACHE_DIR", "/tmp/vllm_cache")
+    vllm_cache_dir = os.getenv("VLLM_CACHE_ROOT", "")
     gpu_memory_util = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.92"))
-    swap_space = int(os.getenv("VLLM_SWAP_SPACE", "42"))
     
     # Set VLLM cache directory
-    os.environ["VLLM_CACHE_DIR"] = vllm_cache_dir
+    os.environ["VLLM_CACHE_ROOT"] = vllm_cache_dir
     logger.info(f"VLLM cache directory: {vllm_cache_dir}")
     
     # Initialize VLLM
@@ -260,10 +264,10 @@ def main() -> None:
         tensor_parallel_size=args.tensor_parallel_size,
         max_model_len=max_model_len,
         gpu_memory_utilization=gpu_memory_util,
-        swap_space=swap_space,
         enforce_eager=True,
         disable_custom_all_reduce=True,
         trust_remote_code=True,
+        download_dir=vllm_cache_dir,
     )
 
     logger.info(f"Loading dataset: {args.dataset_path}")
@@ -377,6 +381,21 @@ def main() -> None:
         evaluator = EHRSQLEvaluator(db_path=args.db_path)
         results = evaluator.evaluate(predictions, targets, output_paths["results"])
 
+        # Add execution details to sample results
+        if "detailed_results" in results and len(results["detailed_results"]) == len(sample_results):
+            for i, execution_detail in enumerate(results["detailed_results"]):
+                if i < len(sample_results):
+                    sample_results[i].update({
+                        "predicted_execution_success": execution_detail.get("predicted_success", False),
+                        "predicted_execution_result": execution_detail.get("predicted_result", None),
+                        "predicted_execution_error": execution_detail.get("predicted_error", None),
+                        "target_execution_success": execution_detail.get("ground_truth_success", False),
+                        "target_execution_result": execution_detail.get("ground_truth_result", None),
+                        "target_execution_error": execution_detail.get("ground_truth_error", None),
+                        "execution_match": execution_detail.get("execution_match", False),
+                        "exact_match": execution_detail.get("exact_match", False),
+                    })
+
         # Create comprehensive results
         final_results = {
             "config": config,
@@ -390,10 +409,6 @@ def main() -> None:
             },
             "sample_results": sample_results,
         }
-        
-        # Add detailed execution results if available
-        if "detailed_results" in results:
-            final_results["detailed_execution_results"] = results["detailed_results"]
         
         # Save comprehensive results
         with open(output_paths["results"], "w") as f:
