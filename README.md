@@ -1,6 +1,6 @@
 # EHR-R1: Reinforcement Learning for Electronic Health Record SQL Generation
 
-EHR-R1 is a reinforcement learning framework for training SQL generation models on Electronic Health Record (EHR) data, specifically designed for the MIMIC-IV dataset using GRPO (Group Relative Policy Optimization).
+EHR-R1 is a reinforcement learning framework for training SQL generation models on Electronic Health Record (EHR) data, specifically designed for the MIMIC-IV dataset using GRPO.
 
 ## 🎯 Overview
 
@@ -33,13 +33,6 @@ cp .env.sample .env
 # Edit configuration (optional)
 vim .env
 ```
-
-**Key configuration options:**
-- `VLLM_CACHE_DIR`: Cache directory for VLLM models (default: `/tmp/vllm_cache`)
-- `VLLM_GPU_MEMORY_UTILIZATION`: GPU memory usage ratio (default: `0.92`)
-- `VLLM_SWAP_SPACE`: Swap space in GB for large models (default: `42`)
-
-**Note:** Adjust `VLLM_CACHE_DIR` to a directory with sufficient storage space for model caching.
 
 ### Training a Model
 
@@ -95,50 +88,6 @@ results/
         └── evaluation.log
 ```
 
-## ✨ Key Features
-
-- **🔄 Reinforcement Learning**: GRPO (Group Relative Policy Optimization) training using TRL
-- **🏥 EHR Specialization**: Designed for Electronic Health Record SQL generation
-- **🎯 Reward-Based Training**: Custom reward model for evaluating SQL query quality
-- **📊 Comprehensive Evaluation**: Exact match and execution accuracy metrics
-- **📈 Experiment Tracking**: Weights & Biases integration for monitoring training progress
-- **🗃️ MIMIC-IV Integration**: Native support for MIMIC-IV database structure
-
-## 🛠️ Reinforcement Learning Framework
-
-### GRPO Training
-EHR-R1 uses Group Relative Policy Optimization (GRPO) to train models with reward-based feedback:
-
-- **Policy Model**: Base language model fine-tuned for SQL generation
-- **Reward Model**: Evaluates SQL query quality and correctness
-- **Group Optimization**: Efficient batch-wise policy updates
-
-### Training Pipeline
-1. **Supervised Fine-tuning**: Initial training on question-SQL pairs
-2. **Reward Model Training**: Train reward model to score SQL quality
-3. **GRPO Optimization**: Reinforce correct SQL generation patterns
-4. **Evaluation**: Test on held-out EHR datasets
-
-## 🔍 Evaluation Metrics
-
-### Exact Match Accuracy
-Compares normalized SQL strings after parsing.
-
-### Execution Accuracy
-Executes queries on the actual database and compares results:
-- **Execution Accuracy**: Percentage of correct results
-- **Predicted Success Rate**: Percentage of queries that execute successfully
-- **Ground Truth Success Rate**: Reference query success rate
-
-### Sample Output
-```
-=== EVALUATION RESULTS ===
-Exact Match Accuracy: 0.0000
-Execution Accuracy: 0.2500
-Predicted Success Rate: 0.8000
-Ground Truth Success Rate: 1.0000
-```
-
 ## 📁 Project Structure
 
 ```
@@ -177,7 +126,7 @@ See `pyproject.toml` for complete dependency list.
 ## 🛠️ Development
 
 ### Data Preprocessing
-
+You can follow guidelines by [EHRSQL-2024](https://github.com/glee4810/ehrsql-2024) to obtain the dataset.
 Process MIMIC-IV data for training:
 
 ```bash
