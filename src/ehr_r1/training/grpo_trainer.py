@@ -64,12 +64,19 @@ class EHRSQLGRPOTrainer:
         self.model = None
         self.ref_model = None
         self.grpo_trainer = None
-        self.reward_model = None
 
         # Reward model parameters
         self.reward_success = reward_success
         self.reward_failure = reward_failure
         self.reward_match_bonus = reward_match_bonus
+        
+        # Initialize reward model
+        self.reward_model = EHRSQLRewardModel(
+            db_path=self.db_path,
+            success_reward=self.reward_success,
+            failure_reward=self.reward_failure,
+            execution_match_bonus=self.reward_match_bonus,
+        )
 
         # Initialize wandb if enabled
         if self.use_wandb:
@@ -104,7 +111,7 @@ class EHRSQLGRPOTrainer:
             device_map="auto",
         )
 
-        # Initialize reward model
+        # Connect to reward model database
         try:
             self.reward_model.connect()
         except Exception as e:
