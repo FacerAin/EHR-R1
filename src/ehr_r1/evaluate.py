@@ -203,7 +203,7 @@ def main() -> None:
 
     # Set HuggingFace cache directory if specified
     if os.getenv("HF_HOME"):
-        os.environ["HF_HOME"] = os.getenv("HF_HOME")
+        os.environ["HF_HOME"] = os.getenv("HF_HOME") # type: ignore
         logger.info(f"HuggingFace cache directory: {os.getenv('HF_HOME')}")
 
     args = parse_args()
