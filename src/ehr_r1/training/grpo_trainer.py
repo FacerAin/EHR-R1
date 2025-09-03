@@ -105,13 +105,11 @@ class EHRSQLGRPOTrainer:
         )
         
         # Initialize reward model
-        self.reward_model = EHRSQLRewardModel(
-            db_path=self.db_path,
-            success_reward=self.reward_success,
-            failure_reward=self.reward_failure,
-            execution_match_bonus=self.reward_match_bonus,
-        )
-        self.reward_model.connect()
+        try:
+            self.reward_model.connect()
+        except Exception as e:
+            logger.error(f"Failed to connect to database at {self.db_path}: {e}")
+            raise RuntimeError(f"Database connection failed during reward model setup: {e}") from e
         
         logger.info("Models loaded successfully")
 
