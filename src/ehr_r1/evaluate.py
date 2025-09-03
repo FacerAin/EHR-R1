@@ -15,7 +15,7 @@ from vllm import LLM, SamplingParams
 from ehr_r1.evaluation.evaluator import EHRSQLEvaluator
 from ehr_r1.utils.logger import get_logger
 from ehr_r1.utils.schema import get_schema
-from ehr_r1.utils.prompts import format_sql_prompt
+from ehr_r1.utils.prompts import format_prompt
 
 logger = get_logger(__name__)
 
@@ -124,6 +124,12 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="data/mimic_iv/mimic_iv.sqlite",
         help="Path to the database for execution accuracy evaluation",
+    )
+    parser.add_argument(
+        "--current_time",
+        type=str,
+        default="2100-12-31 23:59:00",
+        help="Current time for temporal context in prompts (e.g., '2023-01-01 00:00:00')",
     )
     return parser.parse_args()
 
@@ -304,7 +310,7 @@ def main() -> None:
                 continue
 
             # Format prompt using template
-            prompt = format_sql_prompt(schema=schema, question=question, template=args.prompt_template)
+            prompt = format_prompt(template_name=args.prompt_template, schema=schema, question=question, current_time=args.current_time)
 
             # Apply chat template
             chat_prompt = tokenizer.apply_chat_template(
