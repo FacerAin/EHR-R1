@@ -60,14 +60,14 @@ accelerate launch --num_processes 4 uv run train \
 
 ### Model Performance on MIMIC-IV (934 samples)
 
-| Model | Size | Execution Accuracy |
-|-------|------|-------------------|
-| **EHR-R1-7B (Ours)** | 7B | TBA |
-| **EHR-R1-3B (Ours)** | 3B | TBA |
-| **Arctic-Text2SQL-R1-7B** | 7B | 36.1% |
-| **OmniSQL-7B** | 7B | 34.0% |
-| **SQL-R1-7B** | 7B | **37.3%** |
-| **SQL-R1-3B** | 3B | 24.0% |
+| Model | Size | Execution Accuracy | HCAcc@90% |
+|-------|------|-------------------| ------ |
+| **EHR-R1-7B (Ours)** | 7B | TBA | TBA | 
+| **EHR-R1-3B (Ours)** | 3B | TBA | TBA |
+| **Arctic-Text2SQL-R1-7B** | 7B | 36.1% | TBA |
+| **OmniSQL-7B** | 7B | 34.0% | TBA |
+| **SQL-R1-7B** | 7B | **37.3%** | TBA |
+| **SQL-R1-3B** | 3B | 24.0% | TBA |
 
 
 ## Data
