@@ -64,7 +64,6 @@ class EHRSQLGRPOTrainer:
 
         self.tokenizer = None
         self.model = None
-        self.ref_model = None
         self.grpo_trainer = None
 
         # Reward model parameters
@@ -99,14 +98,6 @@ class EHRSQLGRPOTrainer:
 
         # Load main model for training
         self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.bfloat16,
-            trust_remote_code=True,
-            device_map="auto",
-        )
-
-        # Load reference model (for GRPO)
-        self.ref_model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=torch.bfloat16,
             trust_remote_code=True,
