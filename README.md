@@ -21,6 +21,41 @@ uv run train --use_wandb --num_epochs 3
 uv run evaluate --model_name MPX0222forHF/SQL-R1-3B --num_samples 1000
 ```
 
+## Multi-GPU Training
+
+### Setup Accelerate
+
+1. Configure accelerate (first time only):
+```bash
+accelerate config
+```
+
+2. For multi-GPU training on a single machine, select:
+   - Compute environment: This machine
+   - Distributed type: multi-GPU
+   - Number of processes: number of GPUs you want to use
+   - Mixed precision: bf16
+
+### Launch Multi-GPU Training
+
+Use accelerate launch instead of python:
+```bash
+accelerate launch --config_file accelerate_config.yaml uv run train \
+    --model-name MPX0222forHF/SQL-R1-3B \
+    --data-path data/ehrsql/train \
+    --epochs 3 \
+    --batch-size 2 \
+    --gradient-accumulation-steps 8
+```
+
+Or with automatic GPU detection:
+```bash
+accelerate launch --num_processes 4 uv run train \
+    --model-name MPX0222forHF/SQL-R1-3B \
+    --data-path data/ehrsql/train \
+    --epochs 3
+```
+
 ## 📊 Evaluation Results
 
 ### Model Performance on MIMIC-IV (934 samples)
