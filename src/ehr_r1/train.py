@@ -104,6 +104,17 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Weights & Biases entity (team/username)",
     )
+    parser.add_argument(
+        "--bf16",
+        action="store_true",
+        help="Use bf16 precision",
+    )
+    parser.add_argument(
+        "--reward-functions",
+        nargs="+",
+        default=["execution"],
+        help="List of reward functions to use",
+    )
     return parser.parse_args()
 
 
@@ -145,6 +156,8 @@ def main() -> None:
         db_path=args.db_path,
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_run_name,
+        bf16=args.bf16,
+        reward_functions=args.reward_functions
     )
 
     # Setup models first
