@@ -1,6 +1,8 @@
 #!/bin/bash
 #SBATCH -J R1
 #SBATCH --gres=gpu:4
+#SBATCH --cpus-per-gpu=8
+#SBATCH --mem-per-gpu=16G
 #SBATCH -p batch_grad
 #SBATCH -w ariel-v3
 #SBATCH -t 1-0
@@ -11,7 +13,7 @@ if [[ "$*" == *"--help"* ]]; then
   echo "Usage: sbatch slurm/train.slurm [options]"
   echo "Options:"
   echo "  --model MODEL            Model name (default: MPX0222forHF/SQL-R1-3B)"
-  echo "  --data DATA_PATH         Data path (default: data/ehrsql/train)"
+  echo "  --data DATA_PATH         Data path (default: data/mimic_iv/train)"
   echo "  --epochs N               Number of epochs (default: 3)"
   echo "  --batch-size N           Batch size per GPU (default: 2)"
   echo "  --grad-acc N             Gradient accumulation steps (default: 4)"
@@ -33,7 +35,7 @@ mkdir -p logs
 
 # Default values
 MODEL="MPX0222forHF/SQL-R1-3B"
-DATA_PATH="data/ehrsql/train"
+DATA_PATH="data/mimic_iv/train"
 EPOCHS=3
 BATCH_SIZE=2
 GRAD_ACC=4
@@ -108,19 +110,19 @@ export NCCL_ASYNC_ERROR_HANDLING=1
 # Build command
 export CMD=" \
     src/ehr_r1/train.py \
-    --model-name $MODEL \
-    --data-path $DATA_PATH \
-    --epochs $EPOCHS \
-    --batch-size $BATCH_SIZE \
-    --gradient-accumulation-steps $GRAD_ACC \
+    --model_name $MODEL \
+    --data_path $DATA_PATH \
+    --num_epochs $EPOCHS \
+    --batch_size $BATCH_SIZE \
+    --gradient_accumulation_steps $GRAD_ACC \
     --reward-functions $REWARD_FUNCS \
-    --use-wandb \
+    --use_wandb \
     --bf16 \
     $ADDITIONAL_ARGS
     "
 
 export LAUNCHER="ACCELERATE_LOG_LEVEL=info TRANSFORMERS_VERBOSITY=info accelerate launch \
-    --config_file accelerate_configs/$ACCELERATOR.yaml \
+    --mixed_precision bf16 \
     --gradient_accumulation_steps $GRAD_ACC \
     --num_machines $NUM_NODES \
     --num_processes $WORLD_SIZE \

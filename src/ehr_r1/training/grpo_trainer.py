@@ -91,11 +91,15 @@ class EHRSQLGRPOTrainer:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         # Load main model for training
+        # Don't use device_map in distributed training
+        import os
+        is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
+        
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=torch.bfloat16,
             trust_remote_code=True,
-            device_map="auto",
+            device_map="auto" if not is_distributed else None,
         )
 
         # Setup SQL executor for reward functions
