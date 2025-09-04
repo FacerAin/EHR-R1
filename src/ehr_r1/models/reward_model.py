@@ -1,136 +1,124 @@
-"""Reward model for EHRSQL evaluation."""
+"""Reward functions for EHRSQL evaluation."""
 
-from typing import Dict, List, Optional
-
-import torch
-import torch.nn as nn
-from transformers import AutoModel, AutoTokenizer
+import re
+from typing import List
 
 from ..utils.sql_executor import SQLExecutor
 
+# Global SQL executor instance (initialized by setup_sql_executor)
+_sql_executor = None
 
-class EHRSQLRewardModel:
-    """Simple reward model based on SQL execution success/failure."""
 
-    def __init__(
-        self,
-        db_path: str,
-        success_reward: float = 1.0,
-        failure_reward: float = -1.0,
-        execution_match_bonus: float = 2.0,
-    ):
-        self.db_path = db_path
-        self.success_reward = success_reward
-        self.failure_reward = failure_reward
-        self.execution_match_bonus = execution_match_bonus
-        self.sql_executor = SQLExecutor(db_path)
+def setup_sql_executor(db_path: str):
+    """Initialize the global SQL executor."""
+    global _sql_executor
+    _sql_executor = SQLExecutor(db_path)
+    _sql_executor.connect()
 
-    def connect(self):
-        """Connect to database."""
-        return self.sql_executor.connect()
 
-    def disconnect(self):
-        """Disconnect from database."""
-        self.sql_executor.disconnect()
+def cleanup_sql_executor():
+    """Cleanup the global SQL executor."""
+    global _sql_executor
+    if _sql_executor:
+        _sql_executor.disconnect()
+        _sql_executor = None
 
-    def compute_reward(
-        self,
-        predicted_sql: str,
-        target_sql: str,
-        question: str = "",
-        schema: str = "",
-    ) -> float:
-        """
-        Compute reward for a predicted SQL query.
 
-        Args:
-            predicted_sql: Generated SQL query
-            target_sql: Ground truth SQL query
-            question: Original question (unused for now)
-            schema: Database schema (unused for now)
+def parse_sql_response(response: str) -> str:
+    """Parse SQL response from model output."""
+    # Look for SQL code blocks
+    pattern = r"```sql\s*(.*?)\s*```"
+    sql_blocks = re.findall(pattern, response, re.DOTALL)
 
-        Returns:
-            Reward score
-        """
-        if not predicted_sql.strip():
-            return self.failure_reward
+    if sql_blocks:
+        # Extract the last SQL query and clean it
+        sql = sql_blocks[-1].strip()
+
+        # Remove SQL comments (lines starting with --)
+        lines = sql.split("\n")
+        sql_lines = []
+        for line in lines:
+            line = line.strip()
+            if line and not line.startswith("--"):
+                sql_lines.append(line)
+
+        return "\n".join(sql_lines)
+
+    return response.strip()
+
+
+def execution_reward_func(completions, target_sqls, **_) -> List[float]:
+    """GRPO-compatible reward function for SQL execution success."""
+    if not _sql_executor:
+        raise RuntimeError("SQL executor not initialized. Call setup_sql_executor() first.")
+    
+    # Extract SQL from completions
+    predicted_sqls = [parse_sql_response(completion) for completion in completions]
+    
+    rewards = []
+    for pred_sql, target_sql in zip(predicted_sqls, target_sqls):
+        if not pred_sql.strip():
+            rewards.append(-1.0)
+            continue
 
         # Execute predicted SQL
-        pred_success, pred_result, pred_error = self.sql_executor.execute_query(
-            predicted_sql
-        )
+        pred_success, pred_result, _ = _sql_executor.execute_query(pred_sql)
 
         if not pred_success:
-            # SQL execution failed - negative reward
-            return self.failure_reward
+            rewards.append(-1.0)
+            continue
 
-        # SQL executed successfully - positive reward
-        reward = self.success_reward
+        # SQL executed successfully - base reward
+        reward = 1.0
 
-        # Check if we have ground truth to compare against
+        # Check if results match ground truth
         if target_sql.strip():
-            target_success, target_result, target_error = (
-                self.sql_executor.execute_query(target_sql)
-            )
-
+            target_success, target_result, _ = _sql_executor.execute_query(target_sql)
             if target_success and pred_result == target_result:
-                # Results match - bonus reward
-                reward += self.execution_match_bonus
+                reward += 2.0  # Match bonus
 
-        return reward
-
-    def compute_batch_rewards(
-        self,
-        predicted_sqls: List[str],
-        target_sqls: List[str],
-        questions: Optional[List[str]] = None,
-        schemas: Optional[List[str]] = None,
-    ) -> List[float]:
-        """Compute rewards for a batch of predictions."""
-        rewards = []
-
-        for i, (pred_sql, target_sql) in enumerate(zip(predicted_sqls, target_sqls)):
-            question = questions[i] if questions else ""
-            schema = schemas[i] if schemas else ""
-
-            reward = self.compute_reward(pred_sql, target_sql, question, schema)
-            rewards.append(reward)
-
-        return rewards
+        rewards.append(reward)
+    
+    return rewards
 
 
-class EHRSQLNeuralRewardModel(nn.Module):
-    """Neural reward model for more sophisticated reward computation (future enhancement)."""
+def sql_syntax_reward_func(completions, **_) -> List[float]:
+    """Reward function for valid SQL syntax."""
+    if not _sql_executor:
+        raise RuntimeError("SQL executor not initialized. Call setup_sql_executor() first.")
+    
+    # Extract SQL from completions
+    predicted_sqls = [parse_sql_response(completion) for completion in completions]
+    
+    rewards = []
+    for pred_sql in predicted_sqls:
+        if not pred_sql.strip():
+            rewards.append(-0.5)
+            continue
 
-    def __init__(
-        self,
-        model_name: str = "microsoft/codebert-base",
-        num_labels: int = 1,
-        dropout: float = 0.1,
-    ):
-        super().__init__()
-        self.model_name = model_name
-        self.backbone = AutoModel.from_pretrained(model_name)
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(self.backbone.config.hidden_size, num_labels)
+        # Check if SQL can be executed (syntax is valid)
+        pred_success, _, _ = _sql_executor.execute_query(pred_sql)
+        rewards.append(0.5 if pred_success else -0.5)
+    
+    return rewards
 
-    def forward(
-        self, input_ids: torch.Tensor, attention_mask: torch.Tensor, **kwargs
-    ) -> torch.Tensor:
-        """Forward pass of the reward model."""
-        outputs = self.backbone(input_ids=input_ids, attention_mask=attention_mask)
-        pooled_output = outputs.pooler_output
-        pooled_output = self.dropout(pooled_output)
-        logits = self.classifier(pooled_output)
-        return logits
 
-    def compute_reward(
-        self,
-        query: str,
-        predicted_sql: str,
-        target_sql: str,
-        tokenizer: AutoTokenizer,
-    ) -> float:
-        """Compute reward using neural model (placeholder for future enhancement)."""
-        # TODO: Implement neural reward computation
-        return 0.0
+def sql_format_reward_func(completions, **_) -> List[float]:
+    """Reward function for proper SQL formatting (has SQL code block)."""
+    rewards = []
+    for completion in completions:
+        # Check if response contains SQL code block
+        if "```sql" in completion and "```" in completion:
+            rewards.append(0.2)
+        else:
+            rewards.append(-0.2)
+    
+    return rewards
+
+
+# List of available reward functions for easy configuration
+AVAILABLE_REWARD_FUNCTIONS = {
+    "execution": execution_reward_func,
+    "syntax": sql_syntax_reward_func, 
+    "format": sql_format_reward_func,
+}

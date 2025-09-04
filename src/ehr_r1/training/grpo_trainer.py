@@ -1,17 +1,15 @@
 """GRPO training implementation using TRL."""
 
-import re
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import numpy as np
 import torch
 import wandb
-from torch.utils.data import DataLoader
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl.trainer.grpo_config import GRPOConfig
 from trl.trainer.grpo_trainer import GRPOTrainer
 
-from ..models.reward_model import EHRSQLRewardModel
+from ..models import reward_model
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -24,6 +22,7 @@ class EHRSQLGRPOTrainer:
         self,
         model_name: str = "MPX0222forHF/SQL-R1-3B",
         learning_rate: float = 1e-5,
+        bf16: bool = True,
         per_device_train_batch_size: int = 4,
         gradient_accumulation_steps: int = 4,
         grpo_epochs: int = 1,
@@ -32,11 +31,9 @@ class EHRSQLGRPOTrainer:
         use_wandb: bool = True,
         beta: float = 0.1,
         db_path: str = "data/mimic_iv/mimic_iv.sqlite",
-        reward_success: float = 1.0,
-        reward_failure: float = -1.0,
-        reward_match_bonus: float = 2.0,
         wandb_project: str = "ehr-r1",
         wandb_run_name: Optional[str] = None,
+        reward_functions: Optional[List[str]] = None,
     ):
         self.model_name = model_name
         self.db_path = db_path
@@ -44,8 +41,18 @@ class EHRSQLGRPOTrainer:
         self.wandb_project = wandb_project
         self.wandb_run_name = wandb_run_name
 
+        # Setup reward functions
+        if reward_functions is None:
+            reward_functions = ["execution"]
+        self.reward_functions = [
+            reward_model.AVAILABLE_REWARD_FUNCTIONS[name] 
+            for name in reward_functions 
+            if name in reward_model.AVAILABLE_REWARD_FUNCTIONS
+        ]
+
         # Initialize GRPO configuration
         self.config = GRPOConfig(
+            bf16=bf16,
             learning_rate=learning_rate,
             per_device_train_batch_size=per_device_train_batch_size,
             gradient_accumulation_steps=gradient_accumulation_steps,
@@ -65,19 +72,6 @@ class EHRSQLGRPOTrainer:
         self.tokenizer = None
         self.model = None
         self.grpo_trainer = None
-
-        # Reward model parameters
-        self.reward_success = reward_success
-        self.reward_failure = reward_failure
-        self.reward_match_bonus = reward_match_bonus
-        
-        # Initialize reward model
-        self.reward_model = EHRSQLRewardModel(
-            db_path=self.db_path,
-            success_reward=self.reward_success,
-            failure_reward=self.reward_failure,
-            execution_match_bonus=self.reward_match_bonus,
-        )
 
         # Initialize wandb if enabled
         if self.use_wandb:
@@ -104,9 +98,9 @@ class EHRSQLGRPOTrainer:
             device_map="auto",
         )
 
-        # Connect to reward model database
+        # Setup SQL executor for reward functions
         try:
-            self.reward_model.connect()
+            reward_model.setup_sql_executor(self.db_path)
         except Exception as e:
             logger.error(f"Failed to connect to database at {self.db_path}: {e}")
             raise RuntimeError(f"Database connection failed during reward model setup: {e}") from e
@@ -120,84 +114,21 @@ class EHRSQLGRPOTrainer:
 
         logger.info("Setting up GRPO trainer")
 
-        # Define reward function for GRPO (expects prompts and completions)
-        def reward_function(prompts, completions):
-            """Compute rewards for a batch of prompts and completions."""
-            # For each prompt, get the corresponding target SQL from dataset
-            rewards = []
-            for i, (prompt, completion) in enumerate(zip(prompts, completions)):
-                # Get target SQL from dataset sample
-                if i < len(dataset):
-                    sample = dataset[i]
-                    target_sql = sample.get("target_sql", "")
-                    question = sample.get("question", "")
-                    
-                    # Compute reward
-                    reward = self.reward_model.compute_reward(
-                        predicted_sql=self.parse_sql_response(completion),
-                        target_sql=target_sql,
-                        question=question,
-                    )
-                    rewards.append(reward)
-                else:
-                    # Fallback reward if no matching sample
-                    rewards.append(self.reward_failure)
-            
-            return rewards
+        # Extract target SQLs for reward functions
+        target_sqls = [sample.get("target_sql", "") for sample in dataset]
 
-        # Create GRPO trainer
+        # Create GRPO trainer with multiple reward functions
         self.grpo_trainer = GRPOTrainer(
             model=self.model,
-            reward_funcs=reward_function,
+            reward_funcs=self.reward_functions,
             args=self.config,
             train_dataset=dataset,
             processing_class=self.tokenizer,
+            target_sqls=target_sqls,
         )
 
         logger.info("GRPO trainer setup complete")
 
-    def parse_sql_response(self, response: str) -> str:
-        """Parse SQL response from model output."""
-        # Look for SQL code blocks
-        pattern = r"```sql\s*(.*?)\s*```"
-        sql_blocks = re.findall(pattern, response, re.DOTALL)
-
-        if sql_blocks:
-            # Extract the last SQL query and clean it
-            sql = sql_blocks[-1].strip()
-
-            # Remove SQL comments (lines starting with --)
-            lines = sql.split("\n")
-            sql_lines = []
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith("--"):
-                    sql_lines.append(line)
-
-            return "\n".join(sql_lines)
-
-        return response.strip()
-
-    def compute_rewards(
-        self, queries: List[str], responses: List[str], target_sqls: List[str]
-    ) -> List[float]:
-        """Compute rewards for generated responses."""
-        rewards = []
-
-        for query, response, target_sql in zip(queries, responses, target_sqls):
-            # Parse SQL from response
-            predicted_sql = self.parse_sql_response(response)
-
-            # Compute reward using reward model
-            reward = self.reward_model.compute_reward(
-                predicted_sql=predicted_sql,
-                target_sql=target_sql,
-                question=query,
-            )
-
-            rewards.append(reward)
-
-        return rewards
 
     def _setup_wandb(self):
         """Setup Weights & Biases logging."""
@@ -214,9 +145,7 @@ class EHRSQLGRPOTrainer:
                     "num_train_epochs": self.config.num_train_epochs,
                     "max_prompt_length": self.config.max_prompt_length,
                     "beta": self.config.beta,
-                    "reward_success": self.reward_success,
-                    "reward_failure": self.reward_failure,
-                    "reward_match_bonus": self.reward_match_bonus,
+                    "reward_functions": [func.__name__ for func in self.reward_functions],
                     "db_path": self.db_path,
                 },
             )
@@ -296,9 +225,8 @@ class EHRSQLGRPOTrainer:
             raise
 
         finally:
-            # Clean up reward model connection
-            if self.reward_model:
-                self.reward_model.disconnect()
+            # Clean up SQL executor
+            reward_model.cleanup_sql_executor()
 
             # Finish wandb run
             if self.use_wandb:
