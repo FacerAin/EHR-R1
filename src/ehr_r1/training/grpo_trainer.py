@@ -114,9 +114,6 @@ class EHRSQLGRPOTrainer:
 
         logger.info("Setting up GRPO trainer")
 
-        # Extract target SQLs for reward functions
-        target_sqls = [sample.get("target_sql", "") for sample in dataset]
-
         # Create GRPO trainer with multiple reward functions
         self.grpo_trainer = GRPOTrainer(
             model=self.model,
@@ -124,7 +121,6 @@ class EHRSQLGRPOTrainer:
             args=self.config,
             train_dataset=dataset,
             processing_class=self.tokenizer,
-            target_sqls=target_sqls,
         )
 
         logger.info("GRPO trainer setup complete")
