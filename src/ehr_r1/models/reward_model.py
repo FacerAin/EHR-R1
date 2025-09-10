@@ -48,7 +48,12 @@ def parse_sql_response(response: str) -> str:
 
 
 def execution_reward_func(prompts, completions, target_sql, **kwargs) -> List[float]:
-    """GRPO-compatible reward function for SQL execution success."""
+    """
+    GRPO-compatible reward function for SQL execution.
+    S_e = 1.0 if execution results exactly align with ground truth
+    S_e = 0.1 if syntax is correct and SQL is executable  
+    S_e = 0.0 otherwise
+    """
     if not _sql_executor:
         raise RuntimeError("SQL executor not initialized. Call setup_sql_executor() first.")
     
@@ -58,24 +63,24 @@ def execution_reward_func(prompts, completions, target_sql, **kwargs) -> List[fl
     rewards = []
     for pred_sql, target in zip(predicted_sqls, target_sql):
         if not pred_sql.strip():
-            rewards.append(-1.0)
+            rewards.append(0.0)  # No SQL provided
             continue
 
         # Execute predicted SQL
         pred_success, pred_result, _ = _sql_executor.execute_query(pred_sql)
 
         if not pred_success:
-            rewards.append(-1.0)
+            rewards.append(0.0)  # SQL syntax error or execution failed
             continue
 
-        # SQL executed successfully - base reward
-        reward = 1.0
+        # SQL executed successfully - base reward of 0.1
+        reward = 0.1
 
         # Check if results match ground truth
         if target.strip():
             target_success, target_result, _ = _sql_executor.execute_query(target)
             if target_success and pred_result == target_result:
-                reward += 2.0  # Match bonus
+                reward = 1.0  # Perfect match - highest reward
 
         rewards.append(reward)
     
