@@ -1,6 +1,8 @@
 """GRPO training implementation using TRL."""
 
 from typing import Dict, List, Optional
+import os
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -52,7 +54,15 @@ class EHRSQLGRPOTrainer:
         self.db_path = db_path
         self.use_wandb = use_wandb
         self.wandb_project = wandb_project
-        self.wandb_run_name = wandb_run_name
+        
+        # Generate meaningful run name if not provided
+        if wandb_run_name is None:
+            # Extract model name (last part after /)
+            model_short_name = model_name.split('/')[-1] if '/' in model_name else model_name
+            # Create run name with key parameters
+            self.wandb_run_name = f"{model_short_name}_lr{learning_rate}_bs{per_device_train_batch_size}x{gradient_accumulation_steps}_beta{beta}_ep{grpo_epochs}"
+        else:
+            self.wandb_run_name = wandb_run_name
 
         # Setup reward functions
         if reward_functions is None:
@@ -62,6 +72,10 @@ class EHRSQLGRPOTrainer:
             for name in reward_functions 
             if name in reward_model.AVAILABLE_REWARD_FUNCTIONS
         ]
+
+        # Create unique output directory for this training run
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.unique_output_dir = f"./outputs/{self.wandb_run_name}_{timestamp}"
 
         # Initialize GRPO configuration
         self.config = GRPOConfig(
@@ -78,7 +92,7 @@ class EHRSQLGRPOTrainer:
             eval_steps=500,
             logging_steps=10,
             remove_unused_columns=False,
-            output_dir="./outputs",
+            output_dir=self.unique_output_dir,
             do_train=True,
             do_eval=True,  # Enable evaluation
             num_generations=4,  # Must be divisible by generation_batch_size
@@ -252,17 +266,23 @@ class EHRSQLGRPOTrainer:
         num_epochs: int = 1,
         save_steps: int = 500,
         eval_steps: int = 500,
-        output_dir: str = "./outputs",
+        output_dir: Optional[str] = None,
     ):
         """Main training loop."""
         if not self.grpo_trainer:
             raise ValueError("Trainer not setup. Call setup_trainer() first.")
 
+        # Use unique output directory if no specific one is provided
+        final_output_dir = output_dir if output_dir else self.unique_output_dir
+        
+        # Ensure output directory exists
+        os.makedirs(final_output_dir, exist_ok=True)
+
         logger.info(f"Starting GRPO training for {num_epochs} epochs")
-        logger.info(f"Output directory: {output_dir}")
+        logger.info(f"Output directory: {final_output_dir}")
 
         # Update config with new parameters
-        self.grpo_trainer.args.output_dir = output_dir
+        self.grpo_trainer.args.output_dir = final_output_dir
         self.grpo_trainer.args.num_train_epochs = num_epochs
         self.grpo_trainer.args.save_steps = save_steps
         self.grpo_trainer.args.eval_steps = eval_steps
@@ -273,9 +293,9 @@ class EHRSQLGRPOTrainer:
             logger.info("Training completed successfully")
 
             # Save final model
-            final_output_dir = f"{output_dir}/final"
-            self.grpo_trainer.save_model(final_output_dir)
-            logger.info(f"Final model saved to {final_output_dir}")
+            final_model_dir = f"{final_output_dir}/final"
+            self.grpo_trainer.save_model(final_model_dir)
+            logger.info(f"Final model saved to {final_model_dir}")
 
         except Exception as e:
             logger.error(f"Training failed: {e}")
