@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import numpy as np
 import torch
 import wandb
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl.trainer.grpo_config import GRPOConfig
 from trl.trainer.grpo_trainer import GRPOTrainer
 
@@ -13,6 +13,19 @@ from ..models import reward_model
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+
+class GenerationLoggingCallback(TrainerCallback):
+    """Callback to log generation examples during training."""
+    
+    def __init__(self, trainer_instance, log_every_n_steps: int = 10):
+        self.trainer_instance = trainer_instance
+        self.log_every_n_steps = log_every_n_steps
+    
+    def on_log(self, args, state, control, model=None, **kwargs):
+        """Called when logging occurs."""
+        if state.global_step % self.log_every_n_steps == 0:
+            self.trainer_instance._log_generation_examples(state.global_step)
 
 
 class EHRSQLGRPOTrainer:
@@ -138,9 +151,71 @@ class EHRSQLGRPOTrainer:
         }
         
         self.grpo_trainer = GRPOTrainer(**trainer_kwargs)
+        
+        # Add generation logging callback
+        if self.use_wandb:
+            generation_callback = GenerationLoggingCallback(self, log_every_n_steps=10)
+            self.grpo_trainer.add_callback(generation_callback)
+            logger.info("Added generation logging callback (every 10 steps)")
 
         logger.info("GRPO trainer setup complete")
 
+    def _log_generation_examples(self, step: int, num_examples: int = 3):
+        """Log generation examples to WandB for qualitative evaluation."""
+        import os
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        if not self.use_wandb or local_rank != 0:
+            return
+            
+        try:
+            # Get some sample prompts from the dataset
+            if hasattr(self.grpo_trainer, 'train_dataset') and self.grpo_trainer.train_dataset:
+                dataset = self.grpo_trainer.train_dataset
+                # Sample a few examples
+                import random
+                sample_indices = random.sample(range(len(dataset)), min(num_examples, len(dataset)))
+                
+                examples_table = []
+                for idx in sample_indices:
+                    sample = dataset[idx]
+                    # Get the prompt (input text before generation)
+                    prompt = self.tokenizer.decode(sample['input_ids'][:sample.get('prompt_length', len(sample['input_ids'])//2)], skip_special_tokens=True)
+                    
+                    # Generate response using current model
+                    try:
+                        response = self.generate_response(
+                            prompt, 
+                            max_new_tokens=200, 
+                            temperature=0.1
+                        )
+                        
+                        # Try to get ground truth if available
+                        ground_truth = sample.get('target_sql', 'N/A')
+                        if isinstance(ground_truth, list) and ground_truth:
+                            ground_truth = ground_truth[0]
+                        
+                        examples_table.append({
+                            "step": step,
+                            "prompt": prompt[:500] + "..." if len(prompt) > 500 else prompt,
+                            "generated_sql": response,
+                            "ground_truth": ground_truth[:500] + "..." if isinstance(ground_truth, str) and len(ground_truth) > 500 else str(ground_truth)
+                        })
+                    except Exception as e:
+                        logger.warning(f"Failed to generate example {idx}: {e}")
+                        continue
+                
+                if examples_table:
+                    wandb.log({
+                        "generation_examples": wandb.Table(
+                            columns=["step", "prompt", "generated_sql", "ground_truth"],
+                            data=[[ex["step"], ex["prompt"], ex["generated_sql"], ex["ground_truth"]] for ex in examples_table]
+                        )
+                    }, step=step)
+                    
+                    logger.info(f"Logged {len(examples_table)} generation examples to WandB")
+                    
+        except Exception as e:
+            logger.warning(f"Failed to log generation examples: {e}")
 
     def _setup_wandb(self):
         """Setup Weights & Biases logging."""
