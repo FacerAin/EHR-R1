@@ -130,6 +130,43 @@ def main() -> None:
         os.environ["HF_HOME"] = hf_home
         logger.info(f"HuggingFace cache directory: {hf_home}")
 
+    # Set WandB API key if specified
+    wandb_api_key = os.getenv("WANDB_API_KEY")
+    if wandb_api_key:
+        import wandb
+        wandb.login(key=wandb_api_key)
+        logger.info("WandB login successful")
+
+    # Set PyTorch CUDA memory allocation config
+    pytorch_cuda_alloc_conf = os.getenv("PYTORCH_CUDA_ALLOC_CONF")
+    if pytorch_cuda_alloc_conf:
+        os.environ["PYTORCH_CUDA_ALLOC_CONF"] = pytorch_cuda_alloc_conf
+        logger.info(f"PyTorch CUDA allocation config: {pytorch_cuda_alloc_conf}")
+
+    # Set temporary directory
+    tmpdir = os.getenv("TMPDIR")
+    if tmpdir:
+        tmpdir = os.path.expandvars(tmpdir)
+        os.environ["TMPDIR"] = tmpdir
+        os.makedirs(tmpdir, exist_ok=True)
+        logger.info(f"Temporary directory: {tmpdir}")
+
+    # Set Triton cache directory (for DeepSpeed)
+    triton_cache_dir = os.getenv("TRITON_CACHE_DIR")
+    if triton_cache_dir:
+        triton_cache_dir = os.path.expandvars(triton_cache_dir)
+        os.environ["TRITON_CACHE_DIR"] = triton_cache_dir
+        os.makedirs(triton_cache_dir, exist_ok=True)
+        logger.info(f"Triton cache directory: {triton_cache_dir}")
+
+    # Set Torch extensions cache directory (for DeepSpeed)
+    torch_extensions_dir = os.getenv("TORCH_EXTENSIONS_DIR")
+    if torch_extensions_dir:
+        torch_extensions_dir = os.path.expandvars(torch_extensions_dir)
+        os.environ["TORCH_EXTENSIONS_DIR"] = torch_extensions_dir
+        os.makedirs(torch_extensions_dir, exist_ok=True)
+        logger.info(f"Torch extensions cache directory: {torch_extensions_dir}")
+
     args = parse_args()
 
     logger.info("Starting EHR-R1 GRPO training")

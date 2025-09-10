@@ -67,14 +67,17 @@ class EHRSQLGRPOTrainer:
             remove_unused_columns=False,
             output_dir="./outputs",
             do_train=True,
+            num_generations=4,  # Must be divisible by generation_batch_size
         )
 
         self.tokenizer = None
         self.model = None
         self.grpo_trainer = None
 
-        # Initialize wandb if enabled
-        if self.use_wandb:
+        # Initialize wandb if enabled (only on main process)
+        import os
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        if self.use_wandb and local_rank == 0:
             self._setup_wandb()
 
     def setup_models(self):
@@ -92,15 +95,20 @@ class EHRSQLGRPOTrainer:
 
         # Load main model for training
         # Don't use device_map in distributed training
-        import os
-        is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
+        # import os
+        # is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
         
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             torch_dtype=torch.bfloat16,
             trust_remote_code=True,
-            device_map="auto" if not is_distributed else None,
         )
+
+        # Enable gradient checkpointing to save memory
+        if hasattr(self.model, 'gradient_checkpointing_enable'):
+            self.model.gradient_checkpointing_enable()
+        elif hasattr(self.model, 'enable_input_require_grads'):
+            self.model.enable_input_require_grads()
 
         # Setup SQL executor for reward functions
         try:
@@ -161,7 +169,9 @@ class EHRSQLGRPOTrainer:
 
     def _log_training_metrics(self, metrics: Dict[str, float], step: int):
         """Log training metrics to wandb."""
-        if self.use_wandb:
+        import os
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        if self.use_wandb and local_rank == 0:
             try:
                 wandb.log(metrics, step=step)
             except Exception as e:
@@ -169,7 +179,9 @@ class EHRSQLGRPOTrainer:
 
     def _log_reward_distribution(self, rewards: List[float], step: int):
         """Log reward distribution to wandb."""
-        if self.use_wandb and rewards:
+        import os
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        if self.use_wandb and rewards and local_rank == 0:
             try:
                 wandb.log(
                     {
@@ -228,11 +240,12 @@ class EHRSQLGRPOTrainer:
             # Clean up SQL executor
             reward_model.cleanup_sql_executor()
 
-            # Finish wandb run
-            if self.use_wandb:
+            # Finish wandb run (only on main process)
+            import os
+            local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+            if self.use_wandb and local_rank == 0:
                 try:
                     import wandb
-
                     wandb.finish()
                 except Exception as e:
                     logger.warning(f"Failed to finish wandb run: {e}")

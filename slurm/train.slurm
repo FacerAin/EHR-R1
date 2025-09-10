@@ -2,9 +2,9 @@
 #SBATCH -J R1
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-gpu=8
-#SBATCH --mem-per-gpu=16G
+#SBATCH --mem-per-gpu=32G
 #SBATCH -p batch_grad
-#SBATCH -w ariel-v3
+#SBATCH -w ariel-g4
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A_${MODEL_NAME_SAFE}.out
 #SBATCH -e logs/slurm-%A_${MODEL_NAME_SAFE}.err
@@ -37,11 +37,13 @@ mkdir -p logs
 MODEL="MPX0222forHF/SQL-R1-3B"
 DATA_PATH="data/mimic_iv/train"
 EPOCHS=3
-BATCH_SIZE=2
-GRAD_ACC=4
+BATCH_SIZE=1
+GRAD_ACC=1
 ACCELERATOR="multi_gpu"
 REWARD_FUNCS="execution"
 ADDITIONAL_ARGS=""
+MAX_LENGTH=1536
+MAX_PROMPT_LENGTH=768
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -104,8 +106,25 @@ echo "  Reward Functions: $REWARD_FUNCS"
 echo "  Nodes: $NUM_NODES"
 echo "  World Size: $WORLD_SIZE"
 
-# Force crashing on NCCL issues
-export NCCL_ASYNC_ERROR_HANDLING=1
+# Load environment variables from .env file
+if [ -f .env ]; then
+    export $(grep -v '^#' .env | xargs)
+fi
+
+# Create temporary directory if TMPDIR is set
+if [ -n "$TMPDIR" ]; then
+    mkdir -p $TMPDIR
+fi
+
+# NCCL configuration for single-node multi-GPU training
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_DEBUG=INFO
+export NCCL_SOCKET_IFNAME=lo
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+
+# PyTorch CUDA memory configuration
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Build command
 export CMD=" \
@@ -115,6 +134,8 @@ export CMD=" \
     --num_epochs $EPOCHS \
     --batch_size $BATCH_SIZE \
     --gradient_accumulation_steps $GRAD_ACC \
+    --max_length $MAX_LENGTH \
+    --max_prompt_length $MAX_PROMPT_LENGTH \
     --reward-functions $REWARD_FUNCS \
     --use_wandb \
     --bf16 \
@@ -122,16 +143,7 @@ export CMD=" \
     "
 
 export LAUNCHER="ACCELERATE_LOG_LEVEL=info TRANSFORMERS_VERBOSITY=info accelerate launch \
-    --mixed_precision bf16 \
-    --gradient_accumulation_steps $GRAD_ACC \
-    --num_machines $NUM_NODES \
-    --num_processes $WORLD_SIZE \
-    --main_process_ip $MASTER_ADDR \
-    --main_process_port $MASTER_PORT \
-    --machine_rank \$SLURM_PROCID \
-    --rdzv_backend=c10d \
-    --max_restarts 1 \
-    --tee 3 \
+    --config_file accelerate_config.yaml \
     "
 
 SRUN_ARGS=" \
