@@ -67,6 +67,7 @@ class EHRSQLGRPOTrainer:
             remove_unused_columns=False,
             output_dir="./outputs",
             do_train=True,
+            do_eval=True,  # Enable evaluation
             num_generations=4,  # Must be divisible by generation_batch_size
         )
 
@@ -119,7 +120,7 @@ class EHRSQLGRPOTrainer:
         
         logger.info("Models loaded successfully")
 
-    def setup_trainer(self, dataset):
+    def setup_trainer(self, dataset, eval_dataset):
         """Setup GRPO trainer with dataset."""
         if not self.model or not self.tokenizer:
             raise ValueError("Models not initialized. Call setup_models() first.")
@@ -127,13 +128,16 @@ class EHRSQLGRPOTrainer:
         logger.info("Setting up GRPO trainer")
 
         # Create GRPO trainer with multiple reward functions
-        self.grpo_trainer = GRPOTrainer(
-            model=self.model,
-            reward_funcs=self.reward_functions,
-            args=self.config,
-            train_dataset=dataset,
-            processing_class=self.tokenizer,
-        )
+        trainer_kwargs = {
+            "model": self.model,
+            "reward_funcs": self.reward_functions,
+            "args": self.config,
+            "train_dataset": dataset,
+            "eval_dataset": eval_dataset,
+            "processing_class": self.tokenizer,
+        }
+        
+        self.grpo_trainer = GRPOTrainer(**trainer_kwargs)
 
         logger.info("GRPO trainer setup complete")
 
@@ -167,40 +171,6 @@ class EHRSQLGRPOTrainer:
             logger.error(f"Failed to initialize wandb: {e}")
             self.use_wandb = False
 
-    def _log_training_metrics(self, metrics: Dict[str, float], step: int):
-        """Log training metrics to wandb."""
-        import os
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-        if self.use_wandb and local_rank == 0:
-            try:
-                wandb.log(metrics, step=step)
-            except Exception as e:
-                logger.warning(f"Failed to log metrics to wandb: {e}")
-
-    def _log_reward_distribution(self, rewards: List[float], step: int):
-        """Log reward distribution to wandb."""
-        import os
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-        if self.use_wandb and rewards and local_rank == 0:
-            try:
-                wandb.log(
-                    {
-                        "reward/mean": np.mean(rewards),
-                        "reward/std": np.std(rewards),
-                        "reward/min": np.min(rewards),
-                        "reward/max": np.max(rewards),
-                        "reward/median": np.median(rewards),
-                        "reward/positive_ratio": sum(1 for r in rewards if r > 0)
-                        / len(rewards),
-                    },
-                    step=step,
-                )
-
-                # Log reward histogram
-                wandb.log({"reward/histogram": wandb.Histogram(rewards)}, step=step)
-
-            except Exception as e:
-                logger.warning(f"Failed to log reward distribution to wandb: {e}")
 
     def train(
         self,
