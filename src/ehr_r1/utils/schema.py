@@ -4,54 +4,54 @@ from typing import Dict, Optional
 
 # MIMIC-IV database schema based on actual database structure
 MIMIC_IV_SCHEMA = """CREATE TABLE patients (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- unique identifier for each patient, example: [10014729, 10003400]
-    gender text, -- patient gender, example: ['f', 'm']
-    dob timestamp, -- date of birth, example: ['2079-07-22 00:00:00', '2028-07-25 00:00:00']
-    dod timestamp, -- date of death if applicable, example: [NULL, '2119-06-22 00:00:00']
+    row_id integer,
+    subject_id integer, -- example: [10014729]
+    gender text, -- example: ['f']
+    dob timestamp, -- example: ['2079-07-22 00:00:00']
+    dod timestamp, -- example: ['2119-06-22 00:00:00']
     PRIMARY KEY (subject_id)
 );
 
 CREATE TABLE admissions (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10004235, 10009628] 
-    hadm_id integer, -- hospital admission identifier, example: [24181354, 25926192]
-    admittime timestamp, -- admission time, example: ['2100-03-19 14:38:00', '2100-09-30 17:08:00']
-    dischtime timestamp, -- discharge time, example: ['2100-03-28 14:02:00', '2100-10-08 13:20:00']
-    admission_type text, -- type of admission, example: ['urgent', 'elective']
-    admission_location text, -- admission location, example: ['transfer from hospital', 'physician referral']
-    discharge_location text, -- discharge location, example: ['skilled nursing facility', 'home health care']
-    insurance text, -- insurance type, example: ['medicaid', 'medicare']
-    language text, -- preferred language, example: ['english', '?']
-    marital_status text, -- marital status, example: ['single', 'married']
-    age integer, -- patient age at admission, example: [47, 58]
+    row_id integer,
+    subject_id integer, -- example: [10004235] 
+    hadm_id integer, -- example: [24181354]
+    admittime timestamp, -- example: ['2100-03-19 14:38:00']
+    dischtime timestamp, -- example: ['2100-03-28 14:02:00']
+    admission_type text, -- example: ['urgent']
+    admission_location text, -- example: ['transfer from hospital']
+    discharge_location text, -- example: ['skilled nursing facility']
+    insurance text, -- example: ['medicaid']
+    language text, -- example: ['english']
+    marital_status text, -- example: ['single']
+    age integer, -- example: [47]
     PRIMARY KEY (hadm_id),
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id)
 );
 
 CREATE TABLE icustays (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10018328, 10020187]
-    hadm_id integer, -- hospital admission identifier, example: [23786647, 24104168]
-    stay_id integer, -- ICU stay identifier, example: [31269608, 37509585]
-    first_careunit text, -- first care unit, example: ['neuro stepdown', 'neuro surgical intensive care unit (neuro sicu)']
-    last_careunit text, -- last care unit, example: ['neuro stepdown', 'neuro stepdown']
-    intime timestamp, -- ICU in time, example: ['2100-05-07 23:03:44', '2100-02-01 04:56:00']
-    outtime timestamp, -- ICU out time, example: ['2100-05-15 15:55:21', '2100-02-06 15:47:50']
+    row_id integer,
+    subject_id integer, -- example: [10018328]
+    hadm_id integer, -- example: [23786647]
+    stay_id integer, -- example: [31269608]
+    first_careunit text, -- example: ['neuro stepdown']
+    last_careunit text, -- example: ['neuro stepdown']
+    intime timestamp, -- example: ['2100-05-07 23:03:44']
+    outtime timestamp, -- example: ['2100-05-15 15:55:21']
     PRIMARY KEY (stay_id),
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE chartevents (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10005817, 10020740]
-    hadm_id integer, -- hospital admission identifier, example: [20626031, 23831430]
-    stay_id integer, -- ICU stay identifier, example: [32604416, 31269608]
-    itemid integer, -- item identifier from d_items, example: [220210, 220051]
-    charttime timestamp, -- chart time, example: ['2100-12-24 00:00:00', '2100-05-07 12:00:00']
-    valuenum real, -- numeric value, example: [19.0, 37.0]
-    valueuom text, -- unit of measurement, example: ['insp/min', 'mmhg']
+    row_id integer,
+    subject_id integer, -- example: [10005817]
+    hadm_id integer, -- example: [20626031]
+    stay_id integer, -- example: [32604416]
+    itemid integer, -- example: [220210]
+    charttime timestamp, -- example: ['2100-12-24 00:00:00']
+    valuenum real, -- example: [19.0]
+    valueuom text, -- example: ['insp/min']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id),
     FOREIGN KEY (stay_id) REFERENCES icustays (stay_id),
@@ -59,61 +59,61 @@ CREATE TABLE chartevents (
 );
 
 CREATE TABLE labevents (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10031757, 10020740]
-    hadm_id integer, -- hospital admission identifier, example: [28477280, 23831430]
-    itemid integer, -- lab item identifier from d_labitems, example: [50970, 50931]
-    charttime timestamp, -- chart time, example: ['2100-10-25 02:00:00', '2100-04-19 08:00:00']
-    valuenum real, -- numeric lab value, example: [2.8, 91.0]
-    valueuom text, -- unit of measurement, example: ['mg/dl', 'mg/dl']
+    row_id integer,
+    subject_id integer, -- example: [10031757]
+    hadm_id integer, -- example: [28477280]
+    itemid integer, -- example: [50970]
+    charttime timestamp, -- example: ['2100-10-25 02:00:00']
+    valuenum real, -- example: [2.8]
+    valueuom text, -- example: ['mg/dl']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id),
     FOREIGN KEY (itemid) REFERENCES d_labitems (itemid)
 );
 
 CREATE TABLE prescriptions (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10020740, 10005817]
-    hadm_id integer, -- hospital admission identifier, example: [23831430, 20626031]
-    starttime timestamp, -- prescription start time, example: ['2100-04-19 11:00:00', '2100-12-20 02:00:00']
-    stoptime timestamp, -- prescription stop time, example: ['2100-04-20 22:00:00', '2100-12-21 12:00:00']
-    drug text, -- drug name, example: ['insulin', 'heparin']
-    dose_val_rx text, -- dose value, example: ['0.0', '5000']
-    dose_unit_rx text, -- dose unit, example: ['unit', 'unit']
-    route text, -- administration route, example: ['sc', 'iv']
+    row_id integer,
+    subject_id integer, -- example: [10020740]
+    hadm_id integer, -- example: [23831430]
+    starttime timestamp, -- example: ['2100-04-19 11:00:00']
+    stoptime timestamp, -- example: ['2100-04-20 22:00:00']
+    drug text, -- example: ['insulin']
+    dose_val_rx text, -- example: ['5000']
+    dose_unit_rx text, -- example: ['unit']
+    route text, -- example: ['sc']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE diagnoses_icd (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10035185, 10011398]
-    hadm_id integer, -- hospital admission identifier, example: [22580999, 27505812]
-    icd_code text, -- ICD diagnosis code, example: ['icd9|4139', 'icd9|v707']
-    charttime timestamp, -- diagnosis time, example: ['2100-05-17 12:53:00', '2100-12-30 13:37:00']
+    row_id integer,
+    subject_id integer, -- example: [10035185]
+    hadm_id integer, -- example: [22580999]
+    icd_code text, -- example: ['icd9|4139']
+    charttime timestamp, -- example: ['2100-05-17 12:53:00']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE procedures_icd (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10011398, 10020740]
-    hadm_id integer, -- hospital admission identifier, example: [27505812, 23831430]
-    icd_code text, -- ICD procedure code, example: ['icd9|3961', 'icd9|3615']
-    charttime timestamp, -- procedure time, example: ['2100-12-30 13:37:00', '2100-04-19 10:00:00']
+    row_id integer,
+    subject_id integer, -- example: [10011398]
+    hadm_id integer, -- example: [27505812]
+    icd_code text, -- example: ['icd9|3961']
+    charttime timestamp, -- example: ['2100-12-30 13:37:00']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE inputevents (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier
-    hadm_id integer, -- hospital admission identifier
-    stay_id integer, -- ICU stay identifier
-    starttime timestamp, -- input start time
-    itemid integer, -- item identifier from d_items
-    totalamount real, -- total amount given
-    totalamountuom text, -- unit of measurement
+    row_id integer,
+    subject_id integer,
+    hadm_id integer,
+    stay_id integer,
+    starttime timestamp,
+    itemid integer,
+    totalamount real,
+    totalamountuom text,
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id),
     FOREIGN KEY (stay_id) REFERENCES icustays (stay_id),
@@ -121,14 +121,14 @@ CREATE TABLE inputevents (
 );
 
 CREATE TABLE outputevents (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier
-    hadm_id integer, -- hospital admission identifier
-    stay_id integer, -- ICU stay identifier
-    charttime timestamp, -- output time
-    itemid integer, -- item identifier from d_items
-    value real, -- output value
-    valueuom text, -- unit of measurement
+    row_id integer,
+    subject_id integer,
+    hadm_id integer,
+    stay_id integer,
+    charttime timestamp,
+    itemid integer,
+    value real,
+    valueuom text,
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id),
     FOREIGN KEY (stay_id) REFERENCES icustays (stay_id),
@@ -136,69 +136,69 @@ CREATE TABLE outputevents (
 );
 
 CREATE TABLE microbiologyevents (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier, example: [10000032, 10005817]
-    hadm_id integer, -- hospital admission identifier, example: [25742920, 22595853]
-    charttime timestamp, -- specimen collection time, example: ['2100-08-26 20:35:00', '2100-05-27 00:19:00']
-    spec_type_desc text, -- specimen type description, example: ['swab', 'blood']
-    test_name text, -- test name, example: ['r/o vancomycin resistant enterococcus', 'blood culture']
-    org_name text, -- organism name if detected, example: [NULL, 'staphylococcus epidermidis']
+    row_id integer,
+    subject_id integer, -- example: [10000032]
+    hadm_id integer, -- example: [25742920]
+    charttime timestamp, -- example: ['2100-08-26 20:35:00']
+    spec_type_desc text, -- example: ['swab']
+    test_name text, -- example: ['r/o vancomycin resistant enterococcus']
+    org_name text, -- example: ['staphylococcus epidermidis']
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE transfers (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier
-    hadm_id integer, -- hospital admission identifier
-    transfer_id integer, -- transfer identifier
-    eventtype text, -- event type, example: ['admit', 'transfer', 'discharge']
-    careunit text, -- care unit, example: ['Emergency Department', 'Medical ICU']
-    intime timestamp, -- transfer in time
-    outtime timestamp, -- transfer out time
+    row_id integer,
+    subject_id integer,
+    hadm_id integer,
+    transfer_id integer,
+    eventtype text, -- example: ['admit']
+    careunit text, -- example: ['Emergency Department']
+    intime timestamp,
+    outtime timestamp,
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE cost (
-    row_id integer, -- internal row identifier
-    subject_id integer, -- patient identifier
-    hadm_id integer, -- hospital admission identifier
-    event_type text, -- event type, example: ['diagnoses_icd', 'procedures_icd']
-    event_id integer, -- event identifier
-    chargetime timestamp, -- charge time
-    cost real, -- cost amount
+    row_id integer,
+    subject_id integer,
+    hadm_id integer,
+    event_type text, -- example: ['diagnoses_icd']
+    event_id integer,
+    chargetime timestamp,
+    cost real,
     FOREIGN KEY (subject_id) REFERENCES patients (subject_id),
     FOREIGN KEY (hadm_id) REFERENCES admissions (hadm_id)
 );
 
 CREATE TABLE d_items (
-    row_id integer, -- internal row identifier
-    itemid integer, -- item identifier, example: [226228, 226545]
-    label text, -- item label, example: ['gender', 'race']
-    abbreviation text, -- item abbreviation, example: ['gender', 'race']
-    linksto text, -- links to table, example: ['chartevents', 'chartevents']
+    row_id integer,
+    itemid integer, -- example: [226228]
+    label text, -- example: ['gender']
+    abbreviation text, -- example: ['gender']
+    linksto text, -- example: ['chartevents']
     PRIMARY KEY (itemid)
 );
 
 CREATE TABLE d_labitems (
-    row_id integer, -- internal row identifier
-    itemid integer, -- lab item identifier, example: [50808, 50826]
-    label text, -- lab item label, example: ['free calcium', 'tidal volume']
+    row_id integer,
+    itemid integer, -- example: [50808]
+    label text, -- example: ['free calcium']
     PRIMARY KEY (itemid)
 );
 
 CREATE TABLE d_icd_diagnoses (
-    row_id integer, -- internal row identifier
-    icd_code text, -- ICD diagnosis code, example: ['A419', 'I5020']
-    long_title text, -- diagnosis description, example: ['Sepsis, unspecified organism', 'Acute systolic heart failure']
+    row_id integer,
+    icd_code text, -- example: ['A419']
+    long_title text, -- example: ['Sepsis, unspecified organism']
     PRIMARY KEY (icd_code)
 );
 
 CREATE TABLE d_icd_procedures (
-    row_id integer, -- internal row identifier
-    icd_code text, -- ICD procedure code, example: ['5A1935Z', '02703DZ']
-    long_title text, -- procedure description
+    row_id integer,
+    icd_code text, -- example: ['5A1935Z']
+    long_title text,
     PRIMARY KEY (icd_code)
 );"""
 
