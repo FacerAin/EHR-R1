@@ -29,6 +29,12 @@ def parse_args() -> argparse.Namespace:
         help="Path to training data",
     )
     parser.add_argument(
+        "--eval_data_path",
+        type=str,
+        default="data/mimic_iv/valid/data.json",
+        help="Path to evaluation data",
+    )
+    parser.add_argument(
         "--output_dir",
         type=str,
         default="./outputs",
@@ -201,8 +207,8 @@ def main() -> None:
     logger.info("Setting up models...")
     trainer.setup_models()
 
-    # Load dataset
-    logger.info("Loading dataset...")
+    # Load training dataset
+    logger.info("Loading training dataset...")
     dataset = EHRSQLDataset(
         data_path=args.data_path,
         tokenizer=trainer.tokenizer,
@@ -211,9 +217,22 @@ def main() -> None:
 
     logger.info(f"Loaded {len(dataset)} training examples")
 
+    # Load evaluation dataset
+    eval_dataset = None
+    if args.eval_data_path and os.path.exists(args.eval_data_path):
+        logger.info("Loading evaluation dataset...")
+        eval_dataset = EHRSQLDataset(
+            data_path=args.eval_data_path,
+            tokenizer=trainer.tokenizer,
+            max_length=args.max_length,
+        )
+        logger.info(f"Loaded {len(eval_dataset)} evaluation examples")
+    else:
+        logger.warning(f"Evaluation dataset not found at {args.eval_data_path}")
+
     # Setup trainer with dataset
     logger.info("Setting up trainer...")
-    trainer.setup_trainer(dataset)
+    trainer.setup_trainer(dataset, eval_dataset)
 
     # Note: Wandb is now initialized in the trainer itself
 
