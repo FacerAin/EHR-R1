@@ -4,11 +4,11 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=32G
 #SBATCH -p batch_grad
-#SBATCH -w ariel-g4
+#SBATCH -w ariel-g2
 #SBATCH -t 1-0
-#SBATCH -o logs/slurm-%A_${MODEL_NAME_SAFE}.out
-#SBATCH -e logs/slurm-%A_${MODEL_NAME_SAFE}.err
-
+#SBATCH -o logs/slurm-%A.out
+#SBATCH -e logs/slurm-%A.err
+  
 if [[ "$*" == *"--help"* ]]; then
   echo "Usage: sbatch slurm/train.slurm [options]"
   echo "Options:"
@@ -36,14 +36,14 @@ mkdir -p logs
 # Default values
 MODEL="MPX0222forHF/SQL-R1-3B"
 DATA_PATH="data/mimic_iv/train"
-EPOCHS=3
-BATCH_SIZE=1
-GRAD_ACC=1
+EPOCHS=1
+BATCH_SIZE=4
+GRAD_ACC=4
 ACCELERATOR="multi_gpu"
 REWARD_FUNCS="execution"
 ADDITIONAL_ARGS=""
-MAX_LENGTH=1536
-MAX_PROMPT_LENGTH=768
+MAX_LENGTH=4096
+MAX_PROMPT_LENGTH=2400
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
