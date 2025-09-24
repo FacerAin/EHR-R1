@@ -47,6 +47,7 @@ class EHRSQLGRPOTrainer:
         wandb_project: str = "ehr-r1",
         wandb_run_name: Optional[str] = None,
         reward_functions: Optional[List[str]] = None,
+        num_generations: int = 4,
         use_flash_attention: bool = False,
     ):
         self.model_name = model_name
@@ -55,6 +56,7 @@ class EHRSQLGRPOTrainer:
         self.wandb_project = wandb_project
         self.wandb_run_name = wandb_run_name
         self.use_flash_attention = use_flash_attention
+        self.num_generations = num_generations
 
         # Setup reward functions
         if reward_functions is None:
@@ -90,7 +92,7 @@ class EHRSQLGRPOTrainer:
             output_dir="./outputs",
             do_train=True,
             do_eval=True,  # Enable evaluation
-            num_generations=4,  # Must be divisible by generation_batch_size
+            num_generations=self.num_generations,  # Must be divisible by generation_batch_size
         )
 
         self.tokenizer = None
@@ -116,11 +118,7 @@ class EHRSQLGRPOTrainer:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        # Load main model for training
-        # Don't use device_map in distributed training
-        # import os
-        # is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
-        
+                
         # Prepare model loading arguments
         model_kwargs = {
             "torch_dtype": torch.bfloat16,
@@ -132,9 +130,15 @@ class EHRSQLGRPOTrainer:
             model_kwargs["attn_implementation"] = "flash_attention_2"
             logger.info("Using Flash Attention 2")
 
+        # Load main model for training
+        # Don't use device_map in distributed training
+        # import os
+        # is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
+        
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            **model_kwargs
+            **model_kwargs,
+            # device_map="auto" if not is_distributed else None,
         )
 
         # Enable gradient checkpointing to save memory

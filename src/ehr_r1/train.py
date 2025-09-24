@@ -121,6 +121,12 @@ def parse_args() -> argparse.Namespace:
         help="Use Flash Attention 2 for memory efficiency",
     )
     parser.add_argument(
+        "--num_generations",
+        type=int,
+        default=4,
+        help="Number of generations per prompt for GRPO (must be divisible by generation_batch_size)",
+    )
+    parser.add_argument(
         "--reward-functions",
         nargs="+",
         default=["execution"],
@@ -206,7 +212,8 @@ def main() -> None:
         wandb_run_name=args.wandb_run_name,
         bf16=args.bf16,
         reward_functions=args.reward_functions,
-        use_flash_attention=args.use_flash_attention
+        use_flash_attention=args.use_flash_attention,
+        num_generations=args.num_generations,
     )
 
     # Setup models first

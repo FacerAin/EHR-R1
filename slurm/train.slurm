@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH -J R1
 #SBATCH --gres=gpu:4
-#SBATCH --cpus-per-gpu=8
+#SBATCH --cpus-per-gpu=4
 #SBATCH --mem-per-gpu=32G
 #SBATCH -p batch_grad
 #SBATCH -w ariel-g1
@@ -19,6 +19,7 @@ if [[ "$*" == *"--help"* ]]; then
   echo "  --grad-acc N             Gradient accumulation steps (default: 4)"
   echo "  --accelerator CONFIG     Accelerator config (default: multi_gpu)"
   echo "  --reward-funcs FUNCS     Reward functions (default: execution)"
+  echo "  --num-generations N      Number of generations per prompt (default: 4)"
   echo "  --args \"ARGS\"          Additional arguments"
   exit 0
 fi
@@ -37,13 +38,14 @@ mkdir -p logs
 MODEL="MPX0222forHF/SQL-R1-3B"
 DATA_PATH="data/mimic_iv/train"
 EPOCHS=1
-BATCH_SIZE=8
+BATCH_SIZE=2
 GRAD_ACC=2
 ACCELERATOR="multi_gpu"
 REWARD_FUNCS="execution"
 ADDITIONAL_ARGS=""
 MAX_LENGTH=4096
 MAX_PROMPT_LENGTH=2400
+NUM_GENERATIONS=8
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -76,6 +78,10 @@ while [[ $# -gt 0 ]]; do
       REWARD_FUNCS="$2"
       shift 2
       ;;
+    --num-generations)
+      NUM_GENERATIONS="$2"
+      shift 2
+      ;;
     --args)
       ADDITIONAL_ARGS="$2"
       shift 2
@@ -103,6 +109,7 @@ echo "  Epochs: $EPOCHS"
 echo "  Batch Size: $BATCH_SIZE"
 echo "  Gradient Accumulation: $GRAD_ACC"
 echo "  Reward Functions: $REWARD_FUNCS"
+echo "  Num Generations: $NUM_GENERATIONS"
 echo "  Nodes: $NUM_NODES"
 echo "  World Size: $WORLD_SIZE"
 
@@ -137,6 +144,7 @@ export CMD=" \
     --max_length $MAX_LENGTH \
     --max_prompt_length $MAX_PROMPT_LENGTH \
     --reward-functions $REWARD_FUNCS \
+    --num_generations $NUM_GENERATIONS \
     --use_wandb \
     --bf16 \
     --use_flash_attention \
