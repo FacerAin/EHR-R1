@@ -47,12 +47,14 @@ class EHRSQLGRPOTrainer:
         wandb_project: str = "ehr-r1",
         wandb_run_name: Optional[str] = None,
         reward_functions: Optional[List[str]] = None,
+        use_flash_attention: bool = False,
     ):
         self.model_name = model_name
         self.db_path = db_path
         self.use_wandb = use_wandb
         self.wandb_project = wandb_project
         self.wandb_run_name = wandb_run_name
+        self.use_flash_attention = use_flash_attention
 
         # Setup reward functions
         if reward_functions is None:
@@ -119,10 +121,20 @@ class EHRSQLGRPOTrainer:
         # import os
         # is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
         
+        # Prepare model loading arguments
+        model_kwargs = {
+            "torch_dtype": torch.bfloat16,
+            "trust_remote_code": True,
+        }
+
+        # Add flash attention if requested
+        if self.use_flash_attention:
+            model_kwargs["attn_implementation"] = "flash_attention_2"
+            logger.info("Using Flash Attention 2")
+
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
-            torch_dtype=torch.bfloat16,
-            trust_remote_code=True,
+            **model_kwargs
         )
 
         # Enable gradient checkpointing to save memory

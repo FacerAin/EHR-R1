@@ -4,7 +4,7 @@
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=32G
 #SBATCH -p batch_grad
-#SBATCH -w ariel-g2
+#SBATCH -w ariel-g1
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
 #SBATCH -e logs/slurm-%A.err
@@ -26,7 +26,7 @@ fi
 set -x -e
 
 source ~/.bashrc
-source .venv/bin/activate
+# source .venv/bin/activate
 START_TIME=$(date +%s)
 echo "START TIME: $(date)"
 
@@ -37,8 +37,8 @@ mkdir -p logs
 MODEL="MPX0222forHF/SQL-R1-3B"
 DATA_PATH="data/mimic_iv/train"
 EPOCHS=1
-BATCH_SIZE=4
-GRAD_ACC=4
+BATCH_SIZE=8
+GRAD_ACC=2
 ACCELERATOR="multi_gpu"
 REWARD_FUNCS="execution"
 ADDITIONAL_ARGS=""
@@ -117,11 +117,11 @@ if [ -n "$TMPDIR" ]; then
 fi
 
 # NCCL configuration for single-node multi-GPU training
-export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
-export NCCL_DEBUG=INFO
-export NCCL_SOCKET_IFNAME=lo
-export NCCL_P2P_DISABLE=1
-export NCCL_IB_DISABLE=1
+# export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+# export NCCL_DEBUG=INFO
+# export NCCL_SOCKET_IFNAME=lo
+# export NCCL_P2P_DISABLE=1
+# export NCCL_IB_DISABLE=1
 
 # PyTorch CUDA memory configuration
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -139,22 +139,20 @@ export CMD=" \
     --reward-functions $REWARD_FUNCS \
     --use_wandb \
     --bf16 \
+    --use_flash_attention \
     $ADDITIONAL_ARGS
     "
 
-export LAUNCHER="ACCELERATE_LOG_LEVEL=info TRANSFORMERS_VERBOSITY=info accelerate launch \
+export LAUNCHER="uv run accelerate launch \
     --config_file accelerate_config.yaml \
     "
 
-SRUN_ARGS=" \
-    --wait=60 \
-    --kill-on-bad-exit=1 \
-    --nodes=$NUM_NODES \
-    --ntasks=$NUM_NODES \
-    "
+# SRUN_ARGS removed - using direct execution
 
 echo "Launching training..."
-srun $SRUN_ARGS bash -c "$LAUNCHER $CMD" 2>&1
+export ACCELERATE_LOG_LEVEL=info
+export TRANSFORMERS_VERBOSITY=info
+$LAUNCHER $CMD 2>&1
 
 END_TIME=$(date +%s)
 echo "END TIME: $(date)"

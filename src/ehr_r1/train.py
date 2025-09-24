@@ -116,6 +116,11 @@ def parse_args() -> argparse.Namespace:
         help="Use bf16 precision",
     )
     parser.add_argument(
+        "--use_flash_attention",
+        action="store_true",
+        help="Use Flash Attention 2 for memory efficiency",
+    )
+    parser.add_argument(
         "--reward-functions",
         nargs="+",
         default=["execution"],
@@ -200,7 +205,8 @@ def main() -> None:
         wandb_project=args.wandb_project,
         wandb_run_name=args.wandb_run_name,
         bf16=args.bf16,
-        reward_functions=args.reward_functions
+        reward_functions=args.reward_functions,
+        use_flash_attention=args.use_flash_attention
     )
 
     # Setup models first
