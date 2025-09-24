@@ -243,6 +243,14 @@ class EHRSQLGRPOTrainer:
     def _setup_wandb(self):
         """Setup Weights & Biases logging."""
         try:
+            # Generate descriptive run name if not provided
+            if not self.wandb_run_name:
+                import datetime
+                model_short = self.model_name.split('/')[-1] if '/' in self.model_name else self.model_name
+                reward_funcs = "-".join([func.__name__ for func in self.reward_functions])
+                timestamp = datetime.datetime.now().strftime("%m%d-%H%M")
+                self.wandb_run_name = f"{model_short}_lr{self.config.learning_rate}_beta{self.config.beta}_{reward_funcs}_{timestamp}"
+
             # Initialize wandb
             wandb.init(
                 project=self.wandb_project,
@@ -257,6 +265,7 @@ class EHRSQLGRPOTrainer:
                     "beta": self.config.beta,
                     "reward_functions": [func.__name__ for func in self.reward_functions],
                     "db_path": self.db_path,
+                    "num_generations": self.num_generations,
                 },
             )
 
