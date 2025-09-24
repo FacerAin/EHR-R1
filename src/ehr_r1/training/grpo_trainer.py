@@ -1,8 +1,7 @@
 """GRPO training implementation using TRL."""
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-import numpy as np
 import torch
 import wandb
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
@@ -189,54 +188,72 @@ class EHRSQLGRPOTrainer:
         local_rank = int(os.environ.get("LOCAL_RANK", "0"))
         if not self.use_wandb or local_rank != 0:
             return
-            
+
         try:
             # Get some sample prompts from the dataset
             if hasattr(self.grpo_trainer, 'train_dataset') and self.grpo_trainer.train_dataset:
                 dataset = self.grpo_trainer.train_dataset
+
+                # Check if dataset has __len__ method
+                try:
+                    dataset_len = len(dataset)
+                except:
+                    logger.warning("Dataset does not support len(), using fixed sample size")
+                    dataset_len = 100
+
                 # Sample a few examples
                 import random
-                sample_indices = random.sample(range(len(dataset)), min(num_examples, len(dataset)))
-                
+                sample_indices = random.sample(range(min(dataset_len, 100)), min(num_examples, min(dataset_len, 100)))
+
                 examples_table = []
                 for idx in sample_indices:
-                    sample = dataset[idx]
-                    # Get the prompt (input text before generation)
-                    prompt = self.tokenizer.decode(sample['input_ids'][:sample.get('prompt_length', len(sample['input_ids'])//2)], skip_special_tokens=True)
-                    
-                    # Generate response using current model
                     try:
+                        sample = dataset[idx]
+
+                        # Get the prompt from the sample
+                        prompt = sample.get('prompt', sample.get('query', ''))
+                        if not prompt:
+                            logger.warning(f"No prompt found in sample {idx}")
+                            continue
+
+                        # Generate response using current model
                         response = self.generate_response(
-                            prompt, 
-                            max_new_tokens=200, 
+                            prompt,
+                            max_new_tokens=200,
                             temperature=0.1
                         )
-                        
-                        # Try to get ground truth if available
+
+                        # Get ground truth
                         ground_truth = sample.get('target_sql', 'N/A')
                         if isinstance(ground_truth, list) and ground_truth:
                             ground_truth = ground_truth[0]
-                        
+
+                        # Truncate long text for readability
+                        truncated_prompt = prompt[:300] + "..." if len(prompt) > 300 else prompt
+                        truncated_ground_truth = ground_truth[:200] + "..." if isinstance(ground_truth, str) and len(ground_truth) > 200 else str(ground_truth)
+
                         examples_table.append({
                             "step": step,
-                            "prompt": prompt[:500] + "..." if len(prompt) > 500 else prompt,
+                            "prompt": truncated_prompt,
                             "generated_sql": response,
-                            "ground_truth": ground_truth[:500] + "..." if isinstance(ground_truth, str) and len(ground_truth) > 500 else str(ground_truth)
+                            "ground_truth": truncated_ground_truth,
+                            "question": sample.get('question', '')[:100] + "..." if len(sample.get('question', '')) > 100 else sample.get('question', '')
                         })
+
                     except Exception as e:
-                        logger.warning(f"Failed to generate example {idx}: {e}")
+                        logger.warning(f"Failed to process example {idx}: {e}")
                         continue
-                
+
                 if examples_table:
                     wandb.log({
                         "generation_examples": wandb.Table(
-                            columns=["step", "prompt", "generated_sql", "ground_truth"],
-                            data=[[ex["step"], ex["prompt"], ex["generated_sql"], ex["ground_truth"]] for ex in examples_table]
+                            columns=["step", "question", "prompt", "generated_sql", "ground_truth"],
+                            data=[[ex["step"], ex["question"], ex["prompt"], ex["generated_sql"], ex["ground_truth"]] for ex in examples_table]
                         )
                     }, step=step)
-                    
+
                     logger.info(f"Logged {len(examples_table)} generation examples to WandB")
-                    
+
         except Exception as e:
             logger.warning(f"Failed to log generation examples: {e}")
 
