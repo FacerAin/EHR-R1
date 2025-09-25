@@ -7,7 +7,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "torch>=2.0.0",
-    "trl[vllm]>=0.7.0",
+    "trl>=0.18.0",
     "datasets>=2.12.0",
     "accelerate>=0.20.0",
     "peft>=0.4.0",
@@ -17,12 +17,12 @@ dependencies = [
     "scikit-learn>=1.3.0",
     "sqlparse>=0.4.0",
     "tqdm>=4.65.0",
-    "vllm",
     "jinja2>=3.0.0",
     "dask>=2025.7.0",
     "deepspeed>=0.17.6",
     "setuptools>=80.9.0",
     "flash-attn==2.7.4.post1",
+    "vllm>=0.7.3",
 ]
 
 [project.optional-dependencies]
