@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH -J R1
 #SBATCH --gres=gpu:4
-#SBATCH --cpus-per-gpu=4
+#SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=32G
 #SBATCH -p batch_grad
-#SBATCH -w ariel-g1
+#SBATCH -w ariel-v13
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
 #SBATCH -e logs/slurm-%A.err
@@ -38,14 +38,14 @@ mkdir -p logs
 MODEL="MPX0222forHF/SQL-R1-3B"
 DATA_PATH="data/mimic_iv/train"
 EPOCHS=1
-BATCH_SIZE=2
+BATCH_SIZE=4
 GRAD_ACC=2
 ACCELERATOR="multi_gpu"
 REWARD_FUNCS="execution"
 ADDITIONAL_ARGS=""
 MAX_LENGTH=4096
 MAX_PROMPT_LENGTH=2400
-NUM_GENERATIONS=8
+NUM_GENERATIONS=16
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
