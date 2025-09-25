@@ -84,14 +84,17 @@ class EHRSQLGRPOTrainer:
             max_completion_length=max(completion_length, 256),
             report_to="wandb" if use_wandb else None,
             beta=beta,
-            save_steps=500,
-            eval_steps=500,
-            logging_steps=10,
+            save_steps=50,
+            eval_steps=50,
+            logging_steps=1,
             remove_unused_columns=False,
             output_dir="./outputs",
             do_train=True,
             do_eval=True,  # Enable evaluation
             num_generations=self.num_generations,  # Must be divisible by generation_batch_size
+            use_vllm=True,  # TODO: make this configurable
+            vllm_mode="colocate",
+            vllm_tensor_parallel_size=4, # TODO: make this configurable
         )
 
         self.tokenizer = None
