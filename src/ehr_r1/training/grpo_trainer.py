@@ -37,6 +37,9 @@ class EHRSQLGRPOTrainer:
         num_generations: int = 4,
         use_flash_attention: bool = False,
         vllm_tensor_parallel_size: int = 4,
+        output_dir: str = "./outputs",
+        save_steps: int = 500,
+        eval_steps: int = 500,
     ):
         self.model_name = model_name
         self.db_path = db_path
@@ -46,6 +49,7 @@ class EHRSQLGRPOTrainer:
         self.use_flash_attention = use_flash_attention
         self.num_generations = num_generations
         self.vllm_tensor_parallel_size = vllm_tensor_parallel_size
+        self.output_dir = output_dir
 
         # Setup reward functions
         if reward_functions is None:
@@ -74,11 +78,11 @@ class EHRSQLGRPOTrainer:
             max_completion_length=max(completion_length, 256),
             report_to="wandb" if use_wandb else None,
             beta=beta,
-            save_steps=50,
-            eval_steps=50,
+            save_steps=save_steps,
+            eval_steps=eval_steps,
             logging_steps=10,
             remove_unused_columns=False,
-            output_dir="./outputs",
+            output_dir=output_dir,
             do_train=True,
             do_eval=True,  # Enable evaluation
             num_generations=self.num_generations,  # Must be divisible by generation_batch_size
@@ -201,25 +205,13 @@ class EHRSQLGRPOTrainer:
             self.use_wandb = False
 
 
-    def train(
-        self,
-        num_epochs: int = 1,
-        save_steps: int = 500,
-        eval_steps: int = 500,
-        output_dir: str = "./outputs",
-    ):
+    def train(self):
         """Main training loop."""
         if not self.grpo_trainer:
             raise ValueError("Trainer not setup. Call setup_trainer() first.")
 
-        logger.info(f"Starting GRPO training for {num_epochs} epochs")
-        logger.info(f"Output directory: {output_dir}")
-
-        # Update config with new parameters
-        self.grpo_trainer.args.output_dir = output_dir
-        self.grpo_trainer.args.num_train_epochs = num_epochs
-        self.grpo_trainer.args.save_steps = save_steps
-        self.grpo_trainer.args.eval_steps = eval_steps
+        logger.info(f"Starting GRPO training for {self.config.num_train_epochs} epochs")
+        logger.info(f"Output directory: {self.config.output_dir}")
 
         # Start training
         try:
@@ -227,7 +219,7 @@ class EHRSQLGRPOTrainer:
             logger.info("Training completed successfully")
 
             # Save final model
-            final_output_dir = f"{output_dir}/final"
+            final_output_dir = f"{self.output_dir}/final"
             self.grpo_trainer.save_model(final_output_dir)
             logger.info(f"Final model saved to {final_output_dir}")
 

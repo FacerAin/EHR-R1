@@ -221,6 +221,9 @@ def main() -> None:
         use_flash_attention=args.use_flash_attention,
         num_generations=args.num_generations,
         vllm_tensor_parallel_size=args.vllm_tensor_parallel_size,
+        output_dir=args.output_dir,
+        save_steps=500,
+        eval_steps=500,
     )
 
     # Setup models first
@@ -259,10 +262,7 @@ def main() -> None:
     # Start training
     logger.info("Starting training...")
     try:
-        trainer.train(
-            num_epochs=args.num_epochs,
-            output_dir=args.output_dir,
-        )
+        trainer.train()
         logger.info("Training completed successfully!")
 
     except Exception as e:
