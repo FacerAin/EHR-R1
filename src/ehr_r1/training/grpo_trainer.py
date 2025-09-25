@@ -4,27 +4,15 @@ from typing import List, Optional
 
 import torch
 import wandb
-from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl.trainer.grpo_config import GRPOConfig
 from trl.trainer.grpo_trainer import GRPOTrainer
+import os
 
 from ..models import reward_model
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-
-class GenerationLoggingCallback(TrainerCallback):
-    """Callback to log generation examples during training."""
-    
-    def __init__(self, trainer_instance, log_every_n_steps: int = 10):
-        self.trainer_instance = trainer_instance
-        self.log_every_n_steps = log_every_n_steps
-    
-    def on_log(self, args, state, control, model=None, **kwargs):
-        """Called when logging occurs."""
-        if state.global_step % self.log_every_n_steps == 0:
-            self.trainer_instance._log_generation_examples(state.global_step)
 
 
 class EHRSQLGRPOTrainer:
@@ -48,6 +36,7 @@ class EHRSQLGRPOTrainer:
         reward_functions: Optional[List[str]] = None,
         num_generations: int = 4,
         use_flash_attention: bool = False,
+        vllm_tensor_parallel_size: int = 4,
     ):
         self.model_name = model_name
         self.db_path = db_path
@@ -56,6 +45,7 @@ class EHRSQLGRPOTrainer:
         self.wandb_run_name = wandb_run_name
         self.use_flash_attention = use_flash_attention
         self.num_generations = num_generations
+        self.vllm_tensor_parallel_size = vllm_tensor_parallel_size
 
         # Setup reward functions
         if reward_functions is None:
@@ -86,7 +76,7 @@ class EHRSQLGRPOTrainer:
             beta=beta,
             save_steps=50,
             eval_steps=50,
-            logging_steps=1,
+            logging_steps=10,
             remove_unused_columns=False,
             output_dir="./outputs",
             do_train=True,
@@ -94,7 +84,7 @@ class EHRSQLGRPOTrainer:
             num_generations=self.num_generations,  # Must be divisible by generation_batch_size
             use_vllm=True,  # TODO: make this configurable
             vllm_mode="colocate",
-            vllm_tensor_parallel_size=4, # TODO: make this configurable
+            vllm_tensor_parallel_size=self.vllm_tensor_parallel_size,
         )
 
         self.tokenizer = None
@@ -102,7 +92,6 @@ class EHRSQLGRPOTrainer:
         self.grpo_trainer = None
 
         # Initialize wandb if enabled (only on main process)
-        import os
         local_rank = int(os.environ.get("LOCAL_RANK", "0"))
         if self.use_wandb and local_rank == 0:
             self._setup_wandb()
@@ -133,14 +122,9 @@ class EHRSQLGRPOTrainer:
             logger.info("Using Flash Attention 2")
 
         # Load main model for training
-        # Don't use device_map in distributed training
-        # import os
-        # is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
-        
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
             **model_kwargs,
-            # device_map="auto" if not is_distributed else None,
         )
 
         # Enable gradient checkpointing to save memory
@@ -176,89 +160,7 @@ class EHRSQLGRPOTrainer:
         }
         
         self.grpo_trainer = GRPOTrainer(**trainer_kwargs)
-        
-        # Add generation logging callback
-        if self.use_wandb:
-            generation_callback = GenerationLoggingCallback(self, log_every_n_steps=10)
-            self.grpo_trainer.add_callback(generation_callback)
-            logger.info("Added generation logging callback (every 10 steps)")
-
         logger.info("GRPO trainer setup complete")
-
-    def _log_generation_examples(self, step: int, num_examples: int = 3):
-        """Log generation examples to WandB for qualitative evaluation."""
-        import os
-        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
-        if not self.use_wandb or local_rank != 0:
-            return
-
-        try:
-            # Get some sample prompts from the dataset
-            if hasattr(self.grpo_trainer, 'train_dataset') and self.grpo_trainer.train_dataset:
-                dataset = self.grpo_trainer.train_dataset
-
-                # Check if dataset has __len__ method
-                try:
-                    dataset_len = len(dataset)
-                except:
-                    logger.warning("Dataset does not support len(), using fixed sample size")
-                    dataset_len = 100
-
-                # Sample a few examples
-                import random
-                sample_indices = random.sample(range(min(dataset_len, 100)), min(num_examples, min(dataset_len, 100)))
-
-                examples_table = []
-                for idx in sample_indices:
-                    try:
-                        sample = dataset[idx]
-
-                        # Get the prompt from the sample
-                        prompt = sample.get('prompt', sample.get('query', ''))
-                        if not prompt:
-                            logger.warning(f"No prompt found in sample {idx}")
-                            continue
-
-                        # Generate response using current model
-                        response = self.generate_response(
-                            prompt,
-                            max_new_tokens=200,
-                            temperature=0.1
-                        )
-
-                        # Get ground truth
-                        ground_truth = sample.get('target_sql', 'N/A')
-                        if isinstance(ground_truth, list) and ground_truth:
-                            ground_truth = ground_truth[0]
-
-                        # Truncate long text for readability
-                        truncated_prompt = prompt[:300] + "..." if len(prompt) > 300 else prompt
-                        truncated_ground_truth = ground_truth[:200] + "..." if isinstance(ground_truth, str) and len(ground_truth) > 200 else str(ground_truth)
-
-                        examples_table.append({
-                            "step": step,
-                            "prompt": truncated_prompt,
-                            "generated_sql": response,
-                            "ground_truth": truncated_ground_truth,
-                            "question": sample.get('question', '')[:100] + "..." if len(sample.get('question', '')) > 100 else sample.get('question', '')
-                        })
-
-                    except Exception as e:
-                        logger.warning(f"Failed to process example {idx}: {e}")
-                        continue
-
-                if examples_table:
-                    wandb.log({
-                        "generation_examples": wandb.Table(
-                            columns=["step", "question", "prompt", "generated_sql", "ground_truth"],
-                            data=[[ex["step"], ex["question"], ex["prompt"], ex["generated_sql"], ex["ground_truth"]] for ex in examples_table]
-                        )
-                    }, step=step)
-
-                    logger.info(f"Logged {len(examples_table)} generation examples to WandB")
-
-        except Exception as e:
-            logger.warning(f"Failed to log generation examples: {e}")
 
     def _setup_wandb(self):
         """Setup Weights & Biases logging."""
@@ -336,9 +238,7 @@ class EHRSQLGRPOTrainer:
         finally:
             # Clean up SQL executor
             reward_model.cleanup_sql_executor()
-
             # Finish wandb run (only on main process)
-            import os
             local_rank = int(os.environ.get("LOCAL_RANK", "0"))
             if self.use_wandb and local_rank == 0:
                 try:
@@ -346,42 +246,3 @@ class EHRSQLGRPOTrainer:
                     wandb.finish()
                 except Exception as e:
                     logger.warning(f"Failed to finish wandb run: {e}")
-
-    def generate_response(
-        self,
-        query: str,
-        max_new_tokens: int = 200,
-        do_sample: bool = True,
-        temperature: float = 0.1,
-    ) -> str:
-        """Generate SQL response for given query."""
-        if not self.model or not self.tokenizer:
-            raise ValueError("Models not initialized. Call setup_models() first.")
-
-        # Tokenize input
-        inputs = self.tokenizer(
-            query,
-            return_tensors="pt",
-            truncation=True,
-            max_length=self.config.max_prompt_length,
-        )
-
-        # Move to device
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-
-        # Generate response
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=do_sample,
-                temperature=temperature,
-                pad_token_id=self.tokenizer.eos_token_id,
-            )
-
-        # Decode response
-        response = self.tokenizer.decode(
-            outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
-        )
-
-        return response.strip()

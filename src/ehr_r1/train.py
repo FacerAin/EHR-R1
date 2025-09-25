@@ -132,6 +132,12 @@ def parse_args() -> argparse.Namespace:
         default=["execution"],
         help="List of reward functions to use",
     )
+    parser.add_argument(
+        "--vllm_tensor_parallel_size",
+        type=int,
+        default=4,
+        help="Tensor parallel size for VLLM inference",
+    )
     return parser.parse_args()
 
 
@@ -214,6 +220,7 @@ def main() -> None:
         reward_functions=args.reward_functions,
         use_flash_attention=args.use_flash_attention,
         num_generations=args.num_generations,
+        vllm_tensor_parallel_size=args.vllm_tensor_parallel_size,
     )
 
     # Setup models first
